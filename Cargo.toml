@@ -1,0 +1,16 @@
+[package]
+name = "rbf"
+version = "0.1.0"
+authors = ["slerpy"]
+edition = "2018"
+
+[profile.dev]
+opt-level = 0
+lto = false
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+
+[dependencies]
