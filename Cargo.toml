@@ -14,3 +14,4 @@ lto = true
 panic = "abort"
 
 [dependencies]
+clap = "2.33.0"

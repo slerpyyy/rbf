@@ -3,8 +3,8 @@ use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 use std::collections::*;
-use std::string::*;
 use std::iter::*;
+use clap::*;
 
 #[derive(Debug)]
 enum IR {
@@ -14,6 +14,7 @@ enum IR {
 	Move(i32),
 	Loop(Vec<IR>),
 	Scan(u8,i32),
+	Fill(u8,i32,i32),
 	Input(i32),
 	Output(i32),
 }
@@ -37,7 +38,8 @@ fn show_code (prog : &Vec<IR>, ind : u32) {
 				show_code(sub, ind + 4);
 			},
 
-			IR::Scan(val, off) => println!("scan {} {}", val, off),
+			IR::Scan(val, off) => println!("scan {} {:+}", val, off),
+			IR::Fill(val, off, step) => println!("fill {} {:+} {:+}", val, off, step),
 			IR::Input(off) => println!("in {}", off),
 			IR::Output(off) => println!("out {}", off),
 		}
@@ -60,6 +62,7 @@ fn munch_forward (list : &Vec<u8>, index : &mut usize, inc : u8, dec : u8) -> i3
 	sum
 }
 
+#[inline]
 fn clear_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>, offset : &mut i32) -> bool {
 	if in_list.len() != 1 {
 		return false;
@@ -91,6 +94,7 @@ fn clear_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>, offset : &mut i32) -
 	true
 }
 
+#[inline]
 fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	let mut pos = 0;
 	let mut sum = 1;
@@ -124,6 +128,7 @@ fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	true
 }
 
+#[inline]
 fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	let mut step = 0;
 	let mut set_step = false;
@@ -178,6 +183,22 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	true
 }
 
+#[inline]
+fn fill_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
+	if in_list.len() != 2 {
+		return false;
+	}
+
+	if let Some(IR::Set(val, off)) = in_list.first() {
+		if let Some(IR::Move(step)) = in_list.last() {
+			out_list.push(IR::Fill(*val, *off, *step));
+			return true;
+		}
+	}
+
+	false
+}
+
 fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
 	let mut list = Vec::new();
 	let mut off_acc = 0;
@@ -226,22 +247,16 @@ fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
 				index = new_index;
 
 				loop {
-					if clear_loop(&mut list, &content, &mut off_acc) {
-						break;
-					}
+					if clear_loop(&mut list, &content, &mut off_acc) { break; }
 
 					if off_acc != 0 {
 						list.push(IR::Move(off_acc));
 						off_acc = 0;
 					}
 
-					if flat_loop(&mut list, &content) {
-						break;
-					}
-
-					if scan_loop(&mut list, &content) {
-						break;
-					}
+					if fill_loop(&mut list, &content) { break; }
+					if flat_loop(&mut list, &content) { break; }
+					if scan_loop(&mut list, &content) { break; }
 
 					list.push(IR::Loop(content));
 					break;
@@ -286,9 +301,7 @@ fn touch_on_tape (tape : &mut VecDeque<u8>, index : &mut usize, offset : i32) ->
 	target as usize
 }
 
-fn execute (prog : &Vec<IR>, tape : &mut VecDeque<u8>, mut index : usize) -> (String, usize) {
-	let mut out_buffer = String::new();
-
+fn execute (prog : &Vec<IR>, tape : &mut VecDeque<u8>, mut index : usize) -> usize {
 	for inst in prog.iter() {
 		//println!("\t > {:03} {:?}\t\t{:?}", index, tape, inst);
 
@@ -331,10 +344,8 @@ fn execute (prog : &Vec<IR>, tape : &mut VecDeque<u8>, mut index : usize) -> (St
 				}
 
 				loop {
-					if let Some(n) = tape.get(index) {
-						if *n == *val {
-							break;
-						}
+					if *(tape.get(index).unwrap()) == *val {
+						break;
 					}
 
 					let target = touch_on_tape(tape, &mut index, *step);
@@ -344,6 +355,20 @@ fn execute (prog : &Vec<IR>, tape : &mut VecDeque<u8>, mut index : usize) -> (St
 				if let Some(cell) = tape.get_mut(index) {
 					*cell = (*cell as u16 + 0x100 - *val as u16) as u8;
 				}
+			},
+
+			IR::Fill(val, off, step) => loop {
+				if *(tape.get(index).unwrap()) == 0 {
+					break;
+				}
+
+				let write_target = touch_on_tape(tape, &mut index, *off);
+				if let Some(cell) = tape.get_mut(write_target) {
+					*cell = *val;
+				}
+
+				let step_target = touch_on_tape(tape, &mut index, *step);
+				index = step_target;
 			},
 
 			IR::Input(_) => unimplemented!(),
@@ -363,27 +388,71 @@ fn execute (prog : &Vec<IR>, tape : &mut VecDeque<u8>, mut index : usize) -> (St
 					}
 				}
 
-				let (new_str, new_index) = execute(&loop_prog, tape, index);
-
-				out_buffer.push_str(&new_str);
-				index = new_index;
+				index = execute(&loop_prog, tape, index);
 			},
 		}
 	}
 
-	(out_buffer, index)
+	index
 }
 
 fn main() -> io::Result<()> {
-	let mut file = File::open("test.b")?;
+
+	let matches = App::new("rbf")
+		.version("0.1.0")
+		.about("A simple optimizing Brainfuck interpreter written in Rust.")
+		.arg(Arg::with_name("file")
+			.value_name("FILE")
+			.help("Sets the input file to use")
+			.required(false)
+			.index(1))
+		.arg(Arg::with_name("command")
+			.short("c")
+			.long("cmd")
+			.value_name("CODE")
+			.help("Sets a custom config file")
+			.takes_value(true))
+		.arg(Arg::with_name("verbosity")
+			.short("v")
+			.multiple(true)
+			.help("Sets the level of verbosity"))
+		.get_matches();
+
+	let command = matches.value_of("command");
+	let filename = matches.value_of("file");
+	let verbosity = matches.occurrences_of("verbosity");
+
 	let mut buffer = Vec::new();
-	let index = 0;
 
-	file.read_to_end(&mut buffer)?;
+	if let Some(cmd_str) = command {
+		buffer = cmd_str.as_bytes().to_vec();
+	} else {
+		if let Some(filename_str) = filename {
+			if filename_str == "-" {
+				io::stdin().read_to_end(&mut buffer)?;
+			} else {
+				let file = File::open(filename_str);
 
-	let (prog, _) = parse(&buffer, index);
+				if let Err(err) = file {
+					eprintln!("ERROR : {}", err);
+					std::process::exit(-1);
+				}
 
-	//show_code(&prog, 0);
+				let mut raw_file = file?;
+				raw_file.read_to_end(&mut buffer)?;
+			}
+		} else {
+			eprintln!("ERROR : No input found");
+			std::process::exit(-1);
+		}
+	}
+
+
+	let (prog, _) = parse(&buffer, 0);
+
+	if verbosity > 0 {
+		show_code(&prog, 0);
+	}
 
 	let mut tape = VecDeque::with_capacity(0x10000);
 	for _ in 0..0x100 { tape.push_back(0u8); }
