@@ -26,14 +26,14 @@ fn munch_forward (
 
 #[inline]
 fn add_inst (out_list : &mut Vec<IR>, sum : u16, offset : &i32) {
-	if let Some(IR::Set(val, off)) = out_list.last_mut() {
+	if let Some(IR::Set(off, val)) = out_list.last_mut() {
 		if *off == *offset {
 			*val = (*val as u16 + sum) as u8;
 			return;
 		}
 	}
 
-	if let Some(IR::Add(val, off)) = out_list.last_mut() {
+	if let Some(IR::Add(off, val)) = out_list.last_mut() {
 		if *off == *offset {
 			*val = (*val as u16 + sum) as u8;
 			if *val == 0 { out_list.pop(); }
@@ -41,7 +41,7 @@ fn add_inst (out_list : &mut Vec<IR>, sum : u16, offset : &i32) {
 		}
 	}
 
-	out_list.push(IR::Add(sum as u8, *offset));
+	out_list.push(IR::Add(*offset, sum as u8));
 }
 
 #[inline]
@@ -64,7 +64,7 @@ fn clear_loop (
 
 	loop {
 		match out_list.last() {
-			Some(IR::Set(_, off)) | Some(IR::Add(_, off)) => {
+			Some(IR::Set(off, _)) | Some(IR::Add(off, _)) => {
 				if *off == *offset {
 					out_list.pop();
 				} else {
@@ -76,12 +76,12 @@ fn clear_loop (
 		}
 	}
 
-	out_list.push(IR::Set(0, *offset));
+	out_list.push(IR::Set(*offset, 0));
 	true
 }
 
 #[inline]
-fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
+fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>, offset : &mut i32) -> bool {
 	let mut pos = 0;
 	let mut sum = 1;
 
@@ -89,7 +89,7 @@ fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 		match *x {
 			IR::Move(off) => pos += off,
 
-			IR::Add(val, off) => if (off + pos) == 0 {
+			IR::Add(off, val) => if (off + pos) == 0 {
 				sum += val as i32;
 				sum &= 0xff;
 			},
@@ -102,15 +102,18 @@ fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 		return false;
 	}
 
+	out_list.push(IR::Store(*offset));
+
 	for x in in_list.iter() {
-		if let IR::Add(val, off) = *x {
-			if !(val == 255 && off == 0) {
-				out_list.push(IR::Mul(val, off))
+		if let IR::Add(off, val) = *x {
+			if val == 255 && off == 0 {
+				continue;
 			}
+
+			out_list.push(IR::Mul(*offset + off, val));
 		}
 	}
 
-	out_list.push(IR::Set(0, 0));
 	true
 }
 
@@ -144,7 +147,7 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	}
 
 	for x in in_list.iter() {
-		if let IR::Add(val, off) = x {
+		if let IR::Add(off, val) = x {
 			if *off == 0 {
 				start_cell += *val as u16;
 				start_cell &= 0xff;
@@ -175,9 +178,9 @@ fn fill_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 		return false;
 	}
 
-	if let Some(IR::Set(val, off)) = in_list.first() {
+	if let Some(IR::Set(off, val)) = in_list.first() {
 		if let Some(IR::Move(step)) = in_list.last() {
-			out_list.push(IR::Fill(*val, *off, *step));
+			out_list.push(IR::Fill(*off, *val, *step));
 			return true;
 		}
 	}
@@ -218,6 +221,7 @@ pub fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
 
 				loop {
 					if clear_loop(&mut list, &content, &mut off_acc) { break; }
+					if flat_loop(&mut list, &content, &mut off_acc) { break; }
 
 					if off_acc != 0 {
 						list.push(IR::Move(off_acc));
@@ -225,7 +229,6 @@ pub fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
 					}
 
 					if fill_loop(&mut list, &content) { break; }
-					if flat_loop(&mut list, &content) { break; }
 					if scan_loop(&mut list, &content) { break; }
 
 					list.push(IR::Loop(content));

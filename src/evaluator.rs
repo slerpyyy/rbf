@@ -14,7 +14,7 @@ fn touch_on_tape (
 	let target = *index as i32 + offset;
 
 	if target < 0 {
-		for _ in 0..(-target) {
+		for _ in target..0 {
 			tape.push_front(0u8);
 		}
 
@@ -25,8 +25,8 @@ fn touch_on_tape (
 	let diff = target - tape.len() as i32;
 
 	if diff >= 0 {
-		let extra_diff = diff + 32;
-		tape.extend(repeat(0u8).take(extra_diff as usize));
+		let extra_diff = (diff + 32) as usize;
+		tape.extend(repeat(0u8).take(extra_diff));
 	}
 
 	target as usize
@@ -39,9 +39,11 @@ pub fn eval (
 	tape : &mut VecDeque<u8>,
 	mut index : usize
 ) -> io::Result<usize> {
+	let mut register = 0u32;
+
 	for inst in prog.iter() {
 		match inst {
-			IR::Set(val, off) => {
+			IR::Set(off, val) => {
 				let target = touch_on_tape(tape, &mut index, *off);
 
 				if let Some(cell) = tape.get_mut(target) {
@@ -49,7 +51,7 @@ pub fn eval (
 				}
 			},
 
-			IR::Add(val, off) => {
+			IR::Add(off, val) => {
 				let target = touch_on_tape(tape, &mut index, *off);
 
 				if let Some(cell) = tape.get_mut(target) {
@@ -57,20 +59,27 @@ pub fn eval (
 				}
 			},
 
-			IR::Mul(val, off) => {
+			IR::Mul(off, val) => {
+				let term = (*val as u32) * register;
 				let target = touch_on_tape(tape, &mut index, *off);
 
-				let factor = *tape.get(index).unwrap();
-
 				if let Some(cell) = tape.get_mut(target as usize) {
-					let adder = *val as u32 * factor as u32;
-					*cell = (*cell as u32 + adder) as u8;
+					*cell = (*cell as u32 + term) as u8;
 				}
 			}
 
 			IR::Move(off) => {
 				let target = touch_on_tape(tape, &mut index, *off);
 				index = target;
+			},
+
+			IR::Store(off) => {
+				let target = touch_on_tape(tape, &mut index, *off);
+
+				if let Some(cell) = tape.get_mut(target as usize) {
+					register = *cell as u32;
+					*cell = 0;
+				}
 			},
 
 			IR::Scan(val, step) => {
@@ -92,8 +101,8 @@ pub fn eval (
 				}
 			},
 
-			IR::Fill(val, off, step) => loop {
-				if *(tape.get(index).unwrap()) == 0 {
+			IR::Fill(off, val, step) => loop {
+				if *tape.get(index).unwrap() == 0 {
 					break;
 				}
 

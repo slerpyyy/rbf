@@ -1,11 +1,12 @@
 pub enum IR {
-	Set(u8,i32),
-	Add(u8,i32),
-	Mul(u8,i32),
+	Set(i32,u8),
+	Add(i32,u8),
+	Mul(i32,u8),
 	Move(i32),
 	Loop(Vec<IR>),
+	Store(i32),
 	Scan(u8,i32),
-	Fill(u8,i32,i32),
+	Fill(i32,u8,i32),
 	Input(i32),
 	Output(i32),
 }
@@ -18,9 +19,9 @@ pub fn show_code (prog : &Vec<IR>, ind : u32) {
 		}
 
 		match inst {
-			IR::Set(val, off) => println!("set {} {:+}", val, off),
-			IR::Add(val, off) => println!("add {} {:+}", val, off),
-			IR::Mul(val, off) => println!("mul {} {:+}", val, off),
+			IR::Set(off, val) => println!("set {:+} {}", off, val),
+			IR::Add(off, val) => println!("add {:+} {}", off, val),
+			IR::Mul(off, val) => println!("mul {:+} {}", off, val),
 
 			IR::Move(off) => println!("mov {:+}", off),
 			IR::Loop(sub) => {
@@ -28,11 +29,13 @@ pub fn show_code (prog : &Vec<IR>, ind : u32) {
 				show_code(sub, ind + 4);
 			},
 
-			IR::Scan(val, off) => println!("scan {} {:+}", val, off),
-			IR::Fill(val, off, step)
-				=> println!("fill {} {:+} {:+}", val, off, step),
+			IR::Store(off) => println!("str {:+}", off),
+			IR::Scan(val, off) => println!("scn {} {:+}", val, off),
 
-			IR::Input(off) => println!("in {}", off),
+			IR::Fill(off, val, step)
+				=> println!("fll {:+} {} {:+}", off, val, step),
+
+				IR::Input(off) => println!("in {}", off),
 			IR::Output(off) => println!("out {}", off),
 		}
 	}
