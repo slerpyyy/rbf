@@ -14,4 +14,5 @@ lto = true
 panic = "abort"
 
 [dependencies]
-clap = "2.33.0"
+getopts = "0.2.21"
+stringreader = "0.1.1"
