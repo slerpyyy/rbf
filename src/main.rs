@@ -1,8 +1,10 @@
 use std::*;
 use std::io;
 use std::io::prelude::*;
+use std::num::Wrapping;
 use std::fs::File;
 use std::collections::*;
+use std::iter::*;
 use string::*;
 use stringreader::*;
 use getopts::*;
@@ -86,9 +88,9 @@ fn main() -> io::Result<()> {
 	if verbosity > 0 { show_code(&prog, 0); }
 
 	let mut tape = VecDeque::with_capacity(0x10000);
-	for _ in 0..0x100 { tape.push_back(0u8); }
+	tape.extend(repeat(Wrapping(0u8)).take(0x1000));
 
-	eval(&prog, input, output, &mut tape, 0)?;
+	eval(&prog, input, output, &mut tape, 0x400)?;
 
 	Ok(())
 }

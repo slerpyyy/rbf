@@ -1,3 +1,5 @@
+use std::num::Wrapping;
+
 use crate::internal::*;
 
 #[inline(always)]
@@ -25,37 +27,37 @@ fn munch_forward (
 }
 
 #[inline]
-fn add_inst (out_list : &mut Vec<IR>, sum : u16, offset : &i32) {
+fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : &isize) {
 	if let Some(IR::Set(off, val)) = out_list.last_mut() {
 		if *off == *offset {
-			*val = (*val as u16 + sum) as u8;
+			*val += sum;
 			return;
 		}
 	}
 
 	if let Some(IR::Add(off, val)) = out_list.last_mut() {
 		if *off == *offset {
-			*val = (*val as u16 + sum) as u8;
-			if *val == 0 { out_list.pop(); }
+			*val += sum;
+			if *val == Wrapping(0u8) { out_list.pop(); }
 			return;
 		}
 	}
 
-	out_list.push(IR::Add(*offset, sum as u8));
+	out_list.push(IR::Add(*offset, sum));
 }
 
 #[inline]
 fn clear_loop (
 	out_list : &mut Vec<IR>,
 	in_list : &Vec<IR>,
-	offset : &mut i32
+	offset : &mut isize
 ) -> bool {
 	if in_list.len() != 1 {
 		return false;
 	}
 
-	if let Some(IR::Add(val, 0)) = in_list.first() {
-		if *val != 1 && *val != 255 {
+	if let Some(IR::Add(0, val)) = in_list.first() {
+		if *val != Wrapping(1u8) && *val != Wrapping(255u8) {
 			return false;
 		}
 	} else {
@@ -76,41 +78,40 @@ fn clear_loop (
 		}
 	}
 
-	out_list.push(IR::Set(*offset, 0));
+	out_list.push(IR::Set(*offset, Wrapping(0u8)));
 	true
 }
 
 #[inline]
-fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>, offset : &mut i32) -> bool {
+fn flat_loop (
+	out_list : &mut Vec<IR>,
+	in_list : &Vec<IR>,
+	offset : &mut isize
+) -> bool {
+	let mut sum = Wrapping(1u8);
 	let mut pos = 0;
-	let mut sum = 1;
 
 	for x in in_list.iter() {
-		match *x {
-			IR::Move(off) => pos += off,
-
-			IR::Add(off, val) => if (off + pos) == 0 {
-				sum += val as i32;
-				sum &= 0xff;
-			},
-
+		match x {
+			IR::Move(off) => pos += *off,
+			IR::Add(off, val) => if *off + pos == 0 { sum += *val },
 			_ => return false,
 		}
 	}
 
-	if pos != 0 || sum != 0 {
+	if (pos != 0) || (sum.0 != 0) {
 		return false;
 	}
 
 	out_list.push(IR::Store(*offset));
 
 	for x in in_list.iter() {
-		if let IR::Add(off, val) = *x {
-			if val == 255 && off == 0 {
-				continue;
+		match x {
+			IR::Add(0, _) => (),
+			IR::Add(off, val) => {
+				out_list.push(IR::Mul(*offset + *off, *val));
 			}
-
-			out_list.push(IR::Mul(*offset + off, val));
+			_ => (),
 		}
 	}
 
@@ -121,8 +122,8 @@ fn flat_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>, offset : &mut i32) ->
 fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	let mut step = 0;
 	let mut set_step = false;
-	let mut start_cell = 0u16;
-	let mut end_cell = 0u16;
+	let mut start_cell = Wrapping(0u8);
+	let mut end_cell = Wrapping(0u8);
 
 	for x in in_list.iter() {
 		match x {
@@ -149,14 +150,12 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	for x in in_list.iter() {
 		if let IR::Add(off, val) = x {
 			if *off == 0 {
-				start_cell += *val as u16;
-				start_cell &= 0xff;
+				start_cell += *val;
 				continue;
 			}
 
 			if *off == step {
-				end_cell += *val as u16;
-				end_cell &= 0xff;
+				end_cell += *val;
 				continue;
 			}
 
@@ -164,11 +163,11 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 		}
 	}
 
-	if (start_cell + end_cell) as u8 != 0 {
+	if start_cell + end_cell != Wrapping(0u8) {
 		return false;
 	}
 
-	out_list.push(IR::Scan(start_cell as u8, step));
+	out_list.push(IR::Scan(start_cell, step));
 	true
 }
 
@@ -189,29 +188,30 @@ fn fill_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 }
 
 pub fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
-	let mut list = Vec::new();
-	let mut off_acc = 0;
+	let mut prog = Vec::new();
+	let mut off_acc = 0isize;
 
 	while index < code.len() {
 		match *code.get(index).unwrap() as char {
 			',' => {
-				list.push(IR::Input(off_acc));
+				prog.push(IR::Input(off_acc));
 			},
 
 			'.' => {
-				list.push(IR::Output(off_acc));
+				prog.push(IR::Output(off_acc));
 			},
 
 			'+' | '-' => {
 				let munch = munch_forward(&code, &mut index, '+', '-');
-				let sum = (munch & 0xff) as u16;
+				let sum = Wrapping(munch as u8);
 
-				add_inst(&mut list, sum, &off_acc);
+				add_inst(&mut prog, sum, &off_acc);
 				continue;
 			},
 
 			'<' | '>' => {
-				off_acc += munch_forward(&code, &mut index, '>', '<');
+				let munch = munch_forward(&code, &mut index, '>', '<');
+				off_acc += munch as isize;
 				continue;
 			},
 
@@ -220,18 +220,18 @@ pub fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
 				index = new_index;
 
 				loop {
-					if clear_loop(&mut list, &content, &mut off_acc) { break; }
-					if flat_loop(&mut list, &content, &mut off_acc) { break; }
+					if clear_loop(&mut prog, &content, &mut off_acc) { break; }
+					if flat_loop(&mut prog, &content, &mut off_acc) { break; }
 
 					if off_acc != 0 {
-						list.push(IR::Move(off_acc));
+						prog.push(IR::Move(off_acc));
 						off_acc = 0;
 					}
 
-					if fill_loop(&mut list, &content) { break; }
-					if scan_loop(&mut list, &content) { break; }
+					if fill_loop(&mut prog, &content) { break; }
+					if scan_loop(&mut prog, &content) { break; }
 
-					list.push(IR::Loop(content));
+					prog.push(IR::Loop(content));
 					break;
 				}
 			},
@@ -245,8 +245,8 @@ pub fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
 	}
 
 	if off_acc != 0 {
-		list.push(IR::Move(off_acc));
+		prog.push(IR::Move(off_acc));
 	}
 
-	(list, index)
+	(prog, index)
 }

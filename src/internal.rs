@@ -1,14 +1,17 @@
+use std::num::Wrapping;
+
+#[derive(Debug)]
 pub enum IR {
-	Set(i32,u8),
-	Add(i32,u8),
-	Mul(i32,u8),
-	Move(i32),
+	Set(isize, Wrapping<u8>),
+	Add(isize, Wrapping<u8>),
+	Mul(isize, Wrapping<u8>),
+	Move(isize),
 	Loop(Vec<IR>),
-	Store(i32),
-	Scan(u8,i32),
-	Fill(i32,u8,i32),
-	Input(i32),
-	Output(i32),
+	Store(isize),
+	Scan(Wrapping<u8>, isize),
+	Fill(isize, Wrapping<u8>, isize),
+	Input(isize),
+	Output(isize),
 }
 
 #[allow(dead_code)]
