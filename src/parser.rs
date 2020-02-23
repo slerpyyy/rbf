@@ -26,22 +26,20 @@ fn munch_forward (
 
 #[inline]
 fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
-	if let Some(IR::Set(off, val)) = out_list.last_mut() {
-		if *off == offset {
+	match out_list.last_mut() {
+		Some(IR::Set(off, val)) if *off == offset => {
 			*val += sum;
-			return;
-		}
-	}
+		},
 
-	if let Some(IR::Add(off, val)) = out_list.last_mut() {
-		if *off == offset {
+		Some(IR::Add(off, val)) if *off == offset => {
 			*val += sum;
-			if *val == Wrapping(0u8) { out_list.pop(); }
-			return;
-		}
-	}
+			if *val == Wrapping(0u8) {
+				out_list.pop();
+			}
+		},
 
-	out_list.push(IR::Add(offset, sum));
+		_ => out_list.push(IR::Add(offset, sum)),
+	}
 }
 
 #[inline]
@@ -102,8 +100,8 @@ fn flat_loop (
 		match x {
 			IR::Add(0, _) => (),
 			IR::Add(off, val) => {
-				out_list.push(IR::Mul(*offset + *off, *val));
-			}
+				out_list.push(IR::Mul(*offset + *off, *val))
+			},
 			_ => (),
 		}
 	}
@@ -142,17 +140,11 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
 
 	for x in in_list.iter() {
 		if let IR::Add(off, val) = x {
-			if *off == 0 {
-				start_cell += *val;
-				continue;
+			match *off {
+				k if k == 0 => start_cell += *val,
+				k if k == step => end_cell += *val,
+				_ => return false,
 			}
-
-			if *off == step {
-				end_cell += *val;
-				continue;
-			}
-
-			return false;
 		}
 	}
 

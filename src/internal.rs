@@ -1,45 +1,51 @@
+use std::fmt;
 use std::num::Wrapping;
 
-#[derive(Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IR {
 	Set(isize, Wrapping<u8>),
 	Add(isize, Wrapping<u8>),
 	Mul(isize, Wrapping<u8>),
 	Move(isize),
-	Loop(Vec<IR>),
 	Store(isize),
+	Loop(Vec<IR>),
 	Scan(Wrapping<u8>, isize),
 	Fill(isize, Wrapping<u8>, isize),
 	Input(isize),
 	Output(isize),
 }
 
-#[allow(dead_code)]
+impl fmt::Display for IR {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			IR::Set(off, val) => write!(f, "set {:+} {}", off, val),
+			IR::Add(off, val) => write!(f, "add {:+} {}", off, val),
+			IR::Mul(off, val) => write!(f, "mul {:+} {}", off, val),
+			IR::Move(off) => write!(f, "mov {:+}", off),
+			IR::Store(off) => write!(f, "str {:+}", off),
+			IR::Loop(_) => write!(f, "whl"),
+			IR::Scan(val, off) => write!(f, "scn {} {:+}", val, off),
+			IR::Fill(off, val, step)
+				=> write!(f, "fll {:+} {} {:+}", off, val, step),
+			IR::Input(off) => write!(f, "inp {:+}", off),
+			IR::Output(off) => write!(f, "out {:+}", off),
+		}
+	}
+}
+
 pub fn show_code (prog : &[IR], ind : u32) {
 	for inst in prog.iter() {
 		for _ in 0..ind {
-			print!(" ");
+			print!("| ");
 		}
 
 		match inst {
-			IR::Set(off, val) => println!("set {:+} {}", off, val),
-			IR::Add(off, val) => println!("add {:+} {}", off, val),
-			IR::Mul(off, val) => println!("mul {:+} {}", off, val),
-
-			IR::Move(off) => println!("mov {:+}", off),
 			IR::Loop(sub) => {
-				println!("loop:");
-				show_code(sub, ind + 4);
+				println!("{}:", inst);
+				show_code(sub, ind + 1);
 			},
 
-			IR::Store(off) => println!("str {:+}", off),
-			IR::Scan(val, off) => println!("scn {} {:+}", val, off),
-
-			IR::Fill(off, val, step)
-				=> println!("fll {:+} {} {:+}", off, val, step),
-
-				IR::Input(off) => println!("in {}", off),
-			IR::Output(off) => println!("out {}", off),
+			_ => println!("{}", inst),
 		}
 	}
 }

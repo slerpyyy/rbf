@@ -37,7 +37,10 @@ fn main() -> io::Result<()> {
 
 	let matches = match opts.parse(&args[1..]) {
 		Ok(m) => { m },
-		Err(f) => { panic!(f.to_string()) },
+		Err(fail) => {
+			eprintln!("ERROR : {}", fail.to_string());
+			process::exit(-1);
+		},
 	};
 
 	if matches.opt_present("h") {
