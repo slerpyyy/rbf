@@ -22,8 +22,8 @@ impl fmt::Display for IR {
 			IR::Add(off, val) => write!(f, "add {:+} {}", off, val),
 			IR::Mul(off, val) => write!(f, "mul {:+} {}", off, val),
 			IR::Move(off) => write!(f, "mov {:+}", off),
-			IR::Store(off) => write!(f, "str {:+}", off),
-			IR::Loop(_) => write!(f, "whl"),
+			IR::Store(off) => write!(f, "stn {:+}", off),
+			IR::Loop(_) => write!(f, "rep"),
 			IR::Scan(val, off) => write!(f, "scn {} {:+}", val, off),
 			IR::Fill(off, val, step)
 				=> write!(f, "fll {:+} {} {:+}", off, val, step),
@@ -41,7 +41,7 @@ pub fn show_code (prog : &[IR], ind : u32) {
 
 		match inst {
 			IR::Loop(sub) => {
-				println!("{}:", inst);
+				println!("{}", inst);
 				show_code(sub, ind + 1);
 			},
 

@@ -1,17 +1,38 @@
+use std::iter::*;
 use std::num::Wrapping;
 
 use crate::internal::*;
 
+pub fn check_valid (bytes : &[u8]) -> bool {
+	let mut sum = 0;
+
+	// returns true for 'Y', '[', ']' or '_'
+	let f = |k : &&u8| -> bool { **k & 0xf9 == 0x59 };
+
+	for b in bytes.iter().filter(f) {
+		match b {
+			b'[' => sum += 1,
+			b']' => {
+				sum -= 1;
+				if sum < 0 { return false; }
+			},
+			_ => (),
+		}
+	}
+
+	(sum == 0)
+}
+
 #[inline]
 fn munch_forward (
-	list : &[u8],
+	bytes : &[u8],
 	index : &mut usize,
 	inc : u8,
 	dec : u8
 ) -> i32 {
 	let mut sum = 0;
 
-	while let Some(&byte) = list.get(*index) {
+	while let Some(&byte) = bytes.get(*index) {
 		match () {
 			_ if byte == inc => sum += 1,
 			_ if byte == dec => sum -= 1,
@@ -192,12 +213,12 @@ fn loop_inst (
 	out_list.push(IR::Loop(in_list));
 }
 
-pub fn parse(code : &[u8], mut index : usize) -> (Vec<IR>, usize) {
+pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 	let mut prog = Vec::new();
 	let mut off_acc = 0isize;
 
-	while index < code.len() {
-		match *code.get(index).unwrap() {
+	while *index < code.len() {
+		match *code.get(*index).unwrap() {
 			b',' => {
 				prog.push(IR::Input(off_acc));
 			},
@@ -221,8 +242,8 @@ pub fn parse(code : &[u8], mut index : usize) -> (Vec<IR>, usize) {
 			},
 
 			b'[' => {
-				let (content, new_index) = parse(&code, index + 1);
-				index = new_index;
+				*index += 1;
+				let content = parse(&code, index);
 
 				loop_inst(&mut prog, content, &mut off_acc);
 			},
@@ -232,12 +253,12 @@ pub fn parse(code : &[u8], mut index : usize) -> (Vec<IR>, usize) {
 			_ => (),
 		}
 
-		index += 1;
+		*index += 1;
 	}
 
 	if off_acc != 0 {
 		prog.push(IR::Move(off_acc));
 	}
 
-	(prog, index)
+	prog
 }

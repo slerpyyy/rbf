@@ -32,7 +32,8 @@ fn main() -> io::Result<()> {
 	let mut opts = Options::new();
 	opts.optflag("h", "help", "print this help message");
 	opts.optopt("c", "cmd", "run code from command", "CODE");
-	opts.optopt("i", "input", "use string as input", "STRING");
+	opts.optopt("i", "input", "use string as input", "TEXT");
+	opts.optflag("f", "force", "allow invalid code to run");
 	opts.optflagmulti("v", "verbose", "increase level of verbosity");
 
 	let matches = match opts.parse(&args[1..]) {
@@ -73,6 +74,11 @@ fn main() -> io::Result<()> {
 		return Ok(());
 	};
 
+	if !matches.opt_present("f") && !check_valid(&code) {
+		eprintln!("ERROR : invalid code");
+		process::exit(-1);
+	}
+
 	let stdin = std::io::stdin();
 	let stdout = std::io::stdout();
 
@@ -87,7 +93,8 @@ fn main() -> io::Result<()> {
 		input = &mut str_input;
 	}
 
-	let (prog, _) = parse(&code, 0);
+	let mut index = 0usize;
+	let prog = parse(&code, &mut index);
 	if verbosity > 0 { show_code(&prog, 0); }
 
 	let mut tape = VecDeque::with_capacity(0x10000);
