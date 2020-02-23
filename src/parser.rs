@@ -2,21 +2,19 @@ use std::num::Wrapping;
 
 use crate::internal::*;
 
-#[inline(always)]
+#[inline]
 fn munch_forward (
-	list : &Vec<u8>,
+	list : &[u8],
 	index : &mut usize,
-	inc : char,
-	dec : char
+	inc : u8,
+	dec : u8
 ) -> i32 {
-	let inc_u8 = inc as u8;
-	let dec_u8 = dec as u8;
 	let mut sum = 0;
 
 	while let Some(&byte) = list.get(*index) {
 		match () {
-			_ if byte == inc_u8 => sum += 1,
-			_ if byte == dec_u8 => sum -= 1,
+			_ if byte == inc => sum += 1,
+			_ if byte == dec => sum -= 1,
 			_ => break,
 		}
 
@@ -27,29 +25,29 @@ fn munch_forward (
 }
 
 #[inline]
-fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : &isize) {
+fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
 	if let Some(IR::Set(off, val)) = out_list.last_mut() {
-		if *off == *offset {
+		if *off == offset {
 			*val += sum;
 			return;
 		}
 	}
 
 	if let Some(IR::Add(off, val)) = out_list.last_mut() {
-		if *off == *offset {
+		if *off == offset {
 			*val += sum;
 			if *val == Wrapping(0u8) { out_list.pop(); }
 			return;
 		}
 	}
 
-	out_list.push(IR::Add(*offset, sum));
+	out_list.push(IR::Add(offset, sum));
 }
 
 #[inline]
 fn clear_loop (
 	out_list : &mut Vec<IR>,
-	in_list : &Vec<IR>,
+	in_list : &[IR],
 	offset : &mut isize
 ) -> bool {
 	if in_list.len() != 1 {
@@ -64,17 +62,12 @@ fn clear_loop (
 		return false;
 	}
 
-	loop {
-		match out_list.last() {
-			Some(IR::Set(off, _)) | Some(IR::Add(off, _)) => {
-				if *off == *offset {
-					out_list.pop();
-				} else {
-					break;
-				}
-			},
-
-			_ => break,
+	while let Some(IR::Set(off, _))
+			| Some(IR::Add(off, _)) = out_list.last() {
+		if *off == *offset {
+			out_list.pop();
+		} else {
+			break;
 		}
 	}
 
@@ -85,7 +78,7 @@ fn clear_loop (
 #[inline]
 fn flat_loop (
 	out_list : &mut Vec<IR>,
-	in_list : &Vec<IR>,
+	in_list : &[IR],
 	offset : &mut isize
 ) -> bool {
 	let mut sum = Wrapping(1u8);
@@ -119,7 +112,7 @@ fn flat_loop (
 }
 
 #[inline]
-fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
+fn scan_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
 	let mut step = 0;
 	let mut set_step = false;
 	let mut start_cell = Wrapping(0u8);
@@ -172,7 +165,7 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 }
 
 #[inline]
-fn fill_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
+fn fill_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
 	if in_list.len() != 2 {
 		return false;
 	}
@@ -187,56 +180,62 @@ fn fill_loop (out_list : &mut Vec<IR>, in_list : &Vec<IR>) -> bool {
 	false
 }
 
-pub fn parse(code : &Vec<u8>, mut index : usize) -> (Vec<IR>, usize) {
+#[inline]
+fn loop_inst (
+	out_list : &mut Vec<IR>,
+	in_list : Vec<IR>,
+	offset : &mut isize
+) {
+	if clear_loop(out_list, &in_list, offset) { return; }
+	if flat_loop(out_list, &in_list, offset) { return; }
+
+	if *offset != 0 {
+		out_list.push(IR::Move(*offset));
+		*offset = 0;
+	}
+
+	if fill_loop(out_list, &in_list) { return; }
+	if scan_loop(out_list, &in_list) { return; }
+
+	out_list.push(IR::Loop(in_list));
+}
+
+pub fn parse(code : &[u8], mut index : usize) -> (Vec<IR>, usize) {
 	let mut prog = Vec::new();
 	let mut off_acc = 0isize;
 
 	while index < code.len() {
-		match *code.get(index).unwrap() as char {
-			',' => {
+		match *code.get(index).unwrap() {
+			b',' => {
 				prog.push(IR::Input(off_acc));
 			},
 
-			'.' => {
+			b'.' => {
 				prog.push(IR::Output(off_acc));
 			},
 
-			'+' | '-' => {
-				let munch = munch_forward(&code, &mut index, '+', '-');
+			b'+' | b'-' => {
+				let munch = munch_forward(&code, &mut index, b'+', b'-');
 				let sum = Wrapping(munch as u8);
 
-				add_inst(&mut prog, sum, &off_acc);
+				add_inst(&mut prog, sum, off_acc);
 				continue;
 			},
 
-			'<' | '>' => {
-				let munch = munch_forward(&code, &mut index, '>', '<');
+			b'<' | b'>' => {
+				let munch = munch_forward(&code, &mut index, b'>', b'<');
 				off_acc += munch as isize;
 				continue;
 			},
 
-			'[' => {
+			b'[' => {
 				let (content, new_index) = parse(&code, index + 1);
 				index = new_index;
 
-				loop {
-					if clear_loop(&mut prog, &content, &mut off_acc) { break; }
-					if flat_loop(&mut prog, &content, &mut off_acc) { break; }
-
-					if off_acc != 0 {
-						prog.push(IR::Move(off_acc));
-						off_acc = 0;
-					}
-
-					if fill_loop(&mut prog, &content) { break; }
-					if scan_loop(&mut prog, &content) { break; }
-
-					prog.push(IR::Loop(content));
-					break;
-				}
+				loop_inst(&mut prog, content, &mut off_acc);
 			},
 
-			']' => break,
+			b']' => break,
 
 			_ => (),
 		}

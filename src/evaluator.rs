@@ -12,8 +12,8 @@ fn touch_on_tape (
 	index : &mut isize,
 	offset : isize
 ) -> isize {
-	let target = *index as isize + offset;
 	const MARGIN : isize = 32;
+	let target = *index as isize + offset;
 
 	if target < 0 {
 		for _ in target..MARGIN {
@@ -34,13 +34,13 @@ fn touch_on_tape (
 	target
 }
 
-#[inline(always)]
+#[inline]
 fn tape_cell (
 	tape : &VecDeque<Wrapping<u8>>,
-	index : &isize,
+	index : isize,
 	offset : isize
 ) -> Wrapping<u8> {
-	let target = *index + offset;
+	let target = index + offset;
 
 	if target < 0 {
 		return Wrapping(0u8)
@@ -50,7 +50,7 @@ fn tape_cell (
 }
 
 pub fn eval (
-	prog : &Vec<IR>,
+	prog : &[IR],
 	input : &mut dyn Read,
 	output : &mut dyn Write,
 	tape : &mut VecDeque<Wrapping<u8>>,
@@ -99,7 +99,7 @@ pub fn eval (
 				}
 
 				loop {
-					if tape_cell(tape, &index, 0) == *val { break; }
+					if tape_cell(tape, index, 0) == *val { break; }
 					index += *step;
 				}
 
@@ -110,7 +110,7 @@ pub fn eval (
 			},
 
 			IR::Fill(off, val, step) => loop {
-				if tape_cell(tape, &index, 0) == Wrapping(0u8) {
+				if tape_cell(tape, index, 0) == Wrapping(0u8) {
 					break;
 				}
 
@@ -124,7 +124,7 @@ pub fn eval (
 
 			IR::Input(off) => {
 				let mut buffer = [0u8];
-				if let Err(_) = input.read_exact(&mut buffer) {
+				if input.read_exact(&mut buffer).is_err() {
 					continue;
 				}
 
@@ -135,12 +135,12 @@ pub fn eval (
 			},
 
 			IR::Output(off) => {
-				let cell = tape_cell(tape, &mut index, *off);
-				output.write(&[cell.0])?;
+				let cell = tape_cell(tape, index, *off);
+				output.write_all(&[cell.0])?;
 			},
 
 			IR::Loop(loop_prog) => loop {
-				if tape_cell(tape, &index, 0) == Wrapping(0u8) {
+				if tape_cell(tape, index, 0) == Wrapping(0u8) {
 					break;
 				}
 

@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use std::*;
 use std::io;
 use std::io::prelude::*;
@@ -17,7 +19,7 @@ use internal::*;
 use parser::*;
 use evaluator::*;
 
-fn print_usage(program : &str, opts : Options) {
+fn print_usage(program : &str, opts : &Options) {
 	println!("Usage: {} FILE [options]\n", program);
 	print!("A simple optimizing Brainfuck interpreter written in Rust.");
 	println!("{}", opts.usage(""));
@@ -39,7 +41,7 @@ fn main() -> io::Result<()> {
 	};
 
 	if matches.opt_present("h") {
-		print_usage(&program, opts);
+		print_usage(&program, &opts);
 		return Ok(());
 	}
 
@@ -49,25 +51,23 @@ fn main() -> io::Result<()> {
 
 	if let Some(command) = matches.opt_str("c") {
 		code = command.as_bytes().to_vec();
-	} else {
-		if let Some(file_name) = matches.free.get(0) {
-			if file_name == "-" {
-				io::stdin().read_to_end(&mut code)?;
-			} else {
-				let file = File::open(file_name);
-
-				if let Err(err) = file {
-					eprintln!("ERROR : {}", err);
-					process::exit(-1);
-				}
-
-				let mut raw_file = file?;
-				raw_file.read_to_end(&mut code)?;
-			}
+	} else if let Some(file_name) = matches.free.get(0) {
+		if file_name == "-" {
+			io::stdin().read_to_end(&mut code)?;
 		} else {
-			print_usage(&program, opts);
-			return Ok(());
+			let file = File::open(file_name);
+
+			if let Err(err) = file {
+				eprintln!("ERROR : {}", err);
+				process::exit(-1);
+			}
+
+			let mut raw_file = file?;
+			raw_file.read_to_end(&mut code)?;
 		}
+	} else {
+		print_usage(&program, &opts);
+		return Ok(());
 	};
 
 	let stdin = std::io::stdin();
@@ -76,11 +76,11 @@ fn main() -> io::Result<()> {
 	let mut input : &mut dyn Read = &mut stdin.lock();
 	let output : &mut dyn Write = &mut stdout.lock();
 
-	let in_string_default = "".to_string();
-	let in_string = matches.opt_str("i").unwrap_or(in_string_default.clone());
-	let mut str_input = StringReader::new(&in_string[..]);
+	let in_string = matches.opt_str("i");
+	let in_string_content = in_string.clone().unwrap_or_default();
+	let mut str_input = StringReader::new(&in_string_content[..]);
 
-	if in_string != in_string_default {
+	if in_string.is_some() {
 		input = &mut str_input;
 	}
 

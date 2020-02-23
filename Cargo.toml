@@ -2,6 +2,10 @@
 name = "rbf"
 version = "0.1.0"
 authors = ["slerpy"]
+
+description = "A simple optimizing Brainfuck interpreter written in Rust"
+repository = "https://github.com/slerpyyy/rbf"
+
 edition = "2018"
 
 [profile.dev]

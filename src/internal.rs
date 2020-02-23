@@ -15,7 +15,7 @@ pub enum IR {
 }
 
 #[allow(dead_code)]
-pub fn show_code (prog : &Vec<IR>, ind : u32) {
+pub fn show_code (prog : &[IR], ind : u32) {
 	for inst in prog.iter() {
 		for _ in 0..ind {
 			print!(" ");
