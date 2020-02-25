@@ -218,6 +218,48 @@ fn fill_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
 }
 
 #[inline]
+fn fixed_loop (
+	out_list : &mut Vec<IR>,
+	in_list : &[IR],
+) -> bool {
+	let mut pos = 0;
+
+	for x in in_list.iter() {
+		match x {
+			IR::Move(off) => pos += *off,
+
+			IR::Loop(_) | IR::Scan(_,_) | IR::Fill(_,_,_)
+				=> return false,
+
+			_ => (),
+		}
+	}
+
+	if pos != 0 {
+		return false;
+	}
+
+	for i in (0..out_list.len()).rev() {
+		if let Some(IR::Touch(high, low)) = out_list.get_mut(i) {
+			if let Some(IR::Touch(new_high, new_low)) = in_list.first() {
+				if *new_high > *high { *high = *new_high; }
+				if *new_low < *low { *low = *new_low; }
+
+				let tail : Vec<IR> = in_list.to_vec()
+					.into_iter().skip(1).collect::<Vec<IR>>();
+
+				out_list.push(IR::FixedLoop(tail));
+				return true;
+			}
+
+			return false;
+		}
+	}
+
+	false
+}
+
+#[inline]
 fn loop_inst (
 	out_list : &mut Vec<IR>,
 	in_list : Vec<IR>,
@@ -230,6 +272,7 @@ fn loop_inst (
 	move_inst(out_list, offset);
 
 	if fill_loop(out_list, &in_list) { return; }
+	if fixed_loop(out_list, &in_list) { return; }
 
 	out_list.push(IR::Loop(in_list));
 }
@@ -285,8 +328,8 @@ pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 	for i in (0..prog.len()).rev() {
 		match prog.get_mut(i).unwrap() {
 			IR::Touch(high, low) => {
-				*high = upper;
-				*low = lower;
+				if upper > *high { *high = upper; }
+				if lower < *low { *low = lower; }
 
 				upper = 0;
 				lower = 0;

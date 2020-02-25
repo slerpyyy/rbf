@@ -10,6 +10,7 @@ pub enum IR {
 	Move(isize),
 	Store(isize),
 	Loop(Vec<IR>),
+	FixedLoop(Vec<IR>),
 	Scan(Wrapping<u8>, isize),
 	Fill(isize, Wrapping<u8>, isize),
 	Input(isize),
@@ -26,6 +27,7 @@ impl fmt::Display for IR {
 			IR::Move(off) => write!(f, "mov {:+}", off),
 			IR::Store(off) => write!(f, "stn {:+}", off),
 			IR::Loop(_) => write!(f, "rep"),
+			IR::FixedLoop(_) => write!(f, "fre"),
 			IR::Scan(val, off) => write!(f, "scn {} {:+}", val, off),
 			IR::Fill(off, val, step)
 				=> write!(f, "fll {:+} {} {:+}", off, val, step),
@@ -42,10 +44,13 @@ pub fn show_code (prog : &[IR], ind : u32) {
 		}
 
 		match inst {
-			IR::Loop(sub) => {
+			IR::Loop(sub) |
+			IR::FixedLoop(sub) => {
 				println!("{}", inst);
 				show_code(sub, ind + 1);
 			},
+
+			IR::Touch(_,_) => println!("{} \t<-----", inst),
 
 			_ => println!("{}", inst),
 		}

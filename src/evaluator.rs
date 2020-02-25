@@ -132,7 +132,7 @@ pub fn eval (
 				output.write_all(&[cell.0])?;
 			},
 
-			IR::Loop(loop_prog) => loop {
+			IR::Loop(loop_prog) | IR::FixedLoop(loop_prog) => loop {
 				if tape_cell(tape, index, 0) == Wrapping(0u8) {
 					break;
 				}
