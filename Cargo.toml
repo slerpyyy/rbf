@@ -19,4 +19,3 @@ panic = "abort"
 
 [dependencies]
 getopts = "0.2.21"
-stringreader = "0.1.1"

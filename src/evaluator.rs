@@ -34,19 +34,24 @@ fn touch_on_tape (
 	target
 }
 
-#[inline]
-fn tape_cell (
-	tape : &VecDeque<Wrapping<u8>>,
-	index : isize,
-	offset : isize
-) -> Wrapping<u8> {
-	let target = index + offset;
+macro_rules! cell_read {
+	($tape:ident, $index:expr) => {
+		$tape.get($index as usize).unwrap_or(&Wrapping(0u8))
+	};
 
-	if target < 0 {
-		return Wrapping(0u8)
-	}
+	($tape:ident, $index:expr, $offset:expr) => {
+		cell_read!($tape, $index + $offset)
+	};
+}
 
-	*tape.get(target as usize).unwrap_or(&Wrapping(0u8))
+macro_rules! cell_write {
+	($tape:ident, $index:expr) => {
+		$tape.get_mut($index as usize).unwrap()
+	};
+
+	($tape:ident, $index:expr, $offset:expr) => {
+		cell_write!($tape, $index + $offset)
+	};
 }
 
 pub fn eval (
@@ -61,56 +66,46 @@ pub fn eval (
 	for inst in prog.iter() {
 		match inst {
 			IR::Touch(high, low) => {
-				touch_on_tape(tape, &mut index, *high);
+				touch_on_tape(tape, &mut index, *high + 1);
 				touch_on_tape(tape, &mut index, *low);
 			},
 
 			IR::Set(off, val) => {
-				let target = index as isize + *off;
-				if let Some(cell) = tape.get_mut(target as usize) {
-					*cell = *val;
-				}
+				*cell_write!(tape, index, off) = *val;
 			},
 
 			IR::Add(off, val) => {
-				let target = index as isize + *off;
-				if let Some(cell) = tape.get_mut(target as usize) {
-					*cell += *val;
-				}
+				*cell_write!(tape, index, off) += *val;
 			},
 
 			IR::Mul(off, val) => {
 				let term = *val * register;
-				let target = index as isize + *off;
-				if let Some(cell) = tape.get_mut(target as usize) {
-					*cell += term;
-				}
+				*cell_write!(tape, index, off) += term;
 			}
 
-			IR::Move(off) => index += *off,
+			IR::Move(off) => {
+				index += *off
+			},
 
 			IR::Store(off) => {
-				let target = index as isize + *off;
-				if let Some(cell) = tape.get_mut(target as usize) {
-					register = *cell;
-					*cell = Wrapping(0u8);
-				}
+				let cell = cell_write!(tape, index, off);
+
+				register = *cell;
+				*cell = Wrapping(0u8);
 			},
 
 			IR::Scan(val, step) => loop {
-				if tape_cell(tape, index, 0) == *val { break; }
+				if *cell_read!(tape, index) == *val { break; }
 				index += *step;
 			},
 
 			IR::Fill(off, val, step) => loop {
-				if tape_cell(tape, index, 0) == Wrapping(0u8) {
+				if *cell_read!(tape, index) == Wrapping(0u8) {
 					break;
 				}
 
 				let target = touch_on_tape(tape, &mut index, *off);
-				if let Some(cell) = tape.get_mut(target as usize) {
-					*cell = *val;
-				}
+				*cell_write!(tape, target) = *val;
 
 				index += *step;
 			},
@@ -121,19 +116,17 @@ pub fn eval (
 					continue;
 				}
 
-				let target = index as isize + *off;
-				if let Some(cell) = tape.get_mut(target as usize) {
-					*cell = Wrapping(buffer[0]);
-				}
+				let val = Wrapping(buffer[0]);
+				*cell_write!(tape, index, off) = val;
 			},
 
 			IR::Output(off) => {
-				let cell = tape_cell(tape, index, *off);
+				let cell = *cell_read!(tape, index, off);
 				output.write_all(&[cell.0])?;
 			},
 
 			IR::Loop(loop_prog) | IR::FixedLoop(loop_prog) => loop {
-				if tape_cell(tape, index, 0) == Wrapping(0u8) {
+				if *cell_read!(tape, index) == Wrapping(0u8) {
 					break;
 				}
 

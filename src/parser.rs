@@ -341,8 +341,6 @@ pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 				if *off < lower { lower = *off; }
 			}
 
-			// Because of the way code is generated,
-			// this case can always be ignored
 			IR::Move(off) => {
 				let shifted_upper = *off + upper;
 				let shifted_lower = *off + lower;

@@ -8,7 +8,6 @@ use std::fs::File;
 use std::collections::*;
 use std::iter::*;
 use string::*;
-use stringreader::*;
 use getopts::*;
 
 mod internal;
@@ -87,7 +86,7 @@ fn main() -> io::Result<()> {
 
 	let in_string = matches.opt_str("i");
 	let in_string_content = in_string.clone().unwrap_or_default();
-	let mut str_input = StringReader::new(&in_string_content[..]);
+	let mut str_input = in_string_content.as_bytes();
 
 	if in_string.is_some() {
 		input = &mut str_input;
@@ -97,7 +96,7 @@ fn main() -> io::Result<()> {
 	let prog = parse(&code, &mut index);
 	if verbosity > 0 { show_code(&prog, 0); }
 
-	let mut tape = VecDeque::with_capacity(0x10000);
+	let mut tape = VecDeque::with_capacity(0x2000);
 	tape.extend(repeat(Wrapping(0u8)).take(0x1000));
 
 	eval(&prog, input, output, &mut tape, 0x400)?;
