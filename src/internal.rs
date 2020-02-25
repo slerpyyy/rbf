@@ -3,6 +3,7 @@ use std::num::Wrapping;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IR {
+	Touch(isize, isize),
 	Set(isize, Wrapping<u8>),
 	Add(isize, Wrapping<u8>),
 	Mul(isize, Wrapping<u8>),
@@ -18,6 +19,7 @@ pub enum IR {
 impl fmt::Display for IR {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			IR::Touch(high, low) => write!(f, "tch {:+} {:+}", high, low),
 			IR::Set(off, val) => write!(f, "set {:+} {}", off, val),
 			IR::Add(off, val) => write!(f, "add {:+} {}", off, val),
 			IR::Mul(off, val) => write!(f, "mul {:+} {}", off, val),

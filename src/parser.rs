@@ -59,8 +59,21 @@ fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
 			}
 		},
 
-		_ => out_list.push(IR::Add(offset, sum)),
+		_ => if sum != Wrapping(0u8) {
+			out_list.push(IR::Add(offset, sum))
+		},
 	}
+}
+
+#[inline]
+fn move_inst (out_list : &mut Vec<IR>, offset : &mut isize) -> bool {
+	if *offset != 0 {
+		out_list.push(IR::Move(*offset));
+		*offset = 0;
+		return true;
+	}
+
+	false
 }
 
 #[inline]
@@ -69,11 +82,11 @@ fn clear_loop (
 	in_list : &[IR],
 	offset : &mut isize
 ) -> bool {
-	if in_list.len() != 1 {
+	if in_list.len() != 2 {
 		return false;
 	}
 
-	if let Some(IR::Add(0, val)) = in_list.first() {
+	if let Some(IR::Add(0, val)) = in_list.last() {
 		if *val != Wrapping(1u8) && *val != Wrapping(255u8) {
 			return false;
 		}
@@ -101,17 +114,16 @@ fn flat_loop (
 	offset : &mut isize
 ) -> bool {
 	let mut sum = Wrapping(1u8);
-	let mut pos = 0;
 
 	for x in in_list.iter() {
 		match x {
-			IR::Move(off) => pos += *off,
-			IR::Add(off, val) => if *off + pos == 0 { sum += *val },
+			IR::Add(0, val) => { sum += *val },
+			IR::Touch(_, _) | IR::Add(_, _) => (),
 			_ => return false,
 		}
 	}
 
-	if (pos != 0) || (sum.0 != 0) {
+	if sum != Wrapping(0u8) {
 		return false;
 	}
 
@@ -131,7 +143,11 @@ fn flat_loop (
 }
 
 #[inline]
-fn scan_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
+fn scan_loop (
+	out_list : &mut Vec<IR>,
+	in_list : &[IR],
+	offset : &mut isize
+) -> bool {
 	let mut step = 0;
 	let mut set_step = false;
 	let mut start_cell = Wrapping(0u8);
@@ -139,7 +155,7 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
 
 	for x in in_list.iter() {
 		match x {
-			IR::Move(_) | IR::Add(_,_) => (),
+			IR::Move(_) | IR::Add(_,_) | IR::Touch(_,_) => (),
 			_ => return false,
 		}
 	}
@@ -173,19 +189,27 @@ fn scan_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
 		return false;
 	}
 
+	add_inst(out_list, start_cell, *offset);
+	move_inst(out_list, offset);
+
 	out_list.push(IR::Scan(start_cell, step));
+	out_list.push(IR::Touch(0, 0));
+
+	add_inst(out_list, end_cell, 0);
+
 	true
 }
 
 #[inline]
 fn fill_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
-	if in_list.len() != 2 {
+	if in_list.len() != 3 {
 		return false;
 	}
 
-	if let Some(IR::Set(off, val)) = in_list.first() {
-		if let Some(IR::Move(step)) = in_list.last() {
+	if let Some(IR::Set(off, val)) = in_list.get(1) {
+		if let Some(IR::Move(step)) = in_list.get(2) {
 			out_list.push(IR::Fill(*off, *val, *step));
+			out_list.push(IR::Touch(0, 0));
 			return true;
 		}
 	}
@@ -201,14 +225,11 @@ fn loop_inst (
 ) {
 	if clear_loop(out_list, &in_list, offset) { return; }
 	if flat_loop(out_list, &in_list, offset) { return; }
+	if scan_loop(out_list, &in_list, offset) { return; }
 
-	if *offset != 0 {
-		out_list.push(IR::Move(*offset));
-		*offset = 0;
-	}
+	move_inst(out_list, offset);
 
 	if fill_loop(out_list, &in_list) { return; }
-	if scan_loop(out_list, &in_list) { return; }
 
 	out_list.push(IR::Loop(in_list));
 }
@@ -216,6 +237,8 @@ fn loop_inst (
 pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 	let mut prog = Vec::new();
 	let mut off_acc = 0isize;
+
+	prog.push(IR::Touch(0,0));
 
 	while *index < code.len() {
 		match *code.get(*index).unwrap() {
@@ -254,6 +277,39 @@ pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 		}
 
 		*index += 1;
+	}
+
+	let mut upper = 0;
+	let mut lower = 0;
+
+	for i in (0..prog.len()).rev() {
+		match prog.get_mut(i).unwrap() {
+			IR::Touch(high, low) => {
+				*high = upper;
+				*low = lower;
+
+				upper = 0;
+				lower = 0;
+			}
+
+			IR::Set(off,_) | IR::Add(off,_) | IR::Mul(off,_) |
+			IR::Store(off) | IR::Input(off) | IR::Output(off) => {
+				if *off > upper { upper = *off; }
+				if *off < lower { lower = *off; }
+			}
+
+			// Because of the way code is generated,
+			// this case can always be ignored
+			IR::Move(off) => {
+				let shifted_upper = *off + upper;
+				let shifted_lower = *off + lower;
+
+				if shifted_upper > upper { upper = shifted_upper; }
+				if shifted_lower < lower { lower = shifted_lower; }
+			},
+
+			_ => (),
+		}
 	}
 
 	if off_acc != 0 {

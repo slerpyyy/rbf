@@ -60,15 +60,20 @@ pub fn eval (
 
 	for inst in prog.iter() {
 		match inst {
+			IR::Touch(high, low) => {
+				touch_on_tape(tape, &mut index, *high);
+				touch_on_tape(tape, &mut index, *low);
+			},
+
 			IR::Set(off, val) => {
-				let target = touch_on_tape(tape, &mut index, *off);
+				let target = index as isize + *off;
 				if let Some(cell) = tape.get_mut(target as usize) {
 					*cell = *val;
 				}
 			},
 
 			IR::Add(off, val) => {
-				let target = touch_on_tape(tape, &mut index, *off);
+				let target = index as isize + *off;
 				if let Some(cell) = tape.get_mut(target as usize) {
 					*cell += *val;
 				}
@@ -76,7 +81,7 @@ pub fn eval (
 
 			IR::Mul(off, val) => {
 				let term = *val * register;
-				let target = touch_on_tape(tape, &mut index, *off);
+				let target = index as isize + *off;
 				if let Some(cell) = tape.get_mut(target as usize) {
 					*cell += term;
 				}
@@ -85,28 +90,16 @@ pub fn eval (
 			IR::Move(off) => index += *off,
 
 			IR::Store(off) => {
-				let target = touch_on_tape(tape, &mut index, *off);
+				let target = index as isize + *off;
 				if let Some(cell) = tape.get_mut(target as usize) {
 					register = *cell;
 					*cell = Wrapping(0u8);
 				}
 			},
 
-			IR::Scan(val, step) => {
-				touch_on_tape(tape, &mut index, 0);
-				if let Some(cell) = tape.get_mut(index as usize) {
-					*cell += *val;
-				}
-
-				loop {
-					if tape_cell(tape, index, 0) == *val { break; }
-					index += *step;
-				}
-
-				touch_on_tape(tape, &mut index, 0);
-				if let Some(cell) = tape.get_mut(index as usize) {
-					*cell -= *val;
-				}
+			IR::Scan(val, step) => loop {
+				if tape_cell(tape, index, 0) == *val { break; }
+				index += *step;
 			},
 
 			IR::Fill(off, val, step) => loop {
@@ -128,7 +121,7 @@ pub fn eval (
 					continue;
 				}
 
-				let target = touch_on_tape(tape, &mut index, *off);
+				let target = index as isize + *off;
 				if let Some(cell) = tape.get_mut(target as usize) {
 					*cell = Wrapping(buffer[0]);
 				}
