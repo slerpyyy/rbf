@@ -1,5 +1,5 @@
-use std::*;
-use std::io::prelude::*;
+use std::io;
+use std::cmp::*;
 use std::num::Wrapping;
 use std::collections::*;
 use std::iter::*;
@@ -7,28 +7,55 @@ use std::iter::*;
 use crate::internal::*;
 
 #[inline]
-fn touch_on_tape (
+fn touch_range (
+	tape : &mut VecDeque<Wrapping<u8>>,
+	index : &mut isize,
+	high : isize,
+	low : isize
+) {
+	const MARGIN : usize = 16;
+	let upper = *index as isize + high;
+	let lower = *index as isize + low;
+
+	let upper_diff = max(0, upper - tape.len() as isize) as usize;
+	let lower_diff = max(0, -lower) as usize;
+
+	let ext_raw = upper_diff + lower_diff;
+
+	if ext_raw > 0 {
+		let ext = ext_raw + 2 * MARGIN;
+		let rot = lower_diff + MARGIN;
+
+		tape.extend(repeat(Wrapping(0u8)).take(ext));
+		tape.rotate_right(rot);
+
+		*index += rot as isize;
+	}
+}
+
+#[inline]
+fn touch_cell (
 	tape : &mut VecDeque<Wrapping<u8>>,
 	index : &mut isize,
 	offset : isize
 ) -> isize {
-	const MARGIN : isize = 32;
+	const MARGIN : isize = 16;
 	let target = *index as isize + offset;
 
 	if target < 0 {
-		for _ in target..MARGIN {
-			tape.push_front(Wrapping(0u8));
-		}
+		let n = (MARGIN - target) as usize;
+		tape.extend(repeat(Wrapping(0u8)).take(n));
+		tape.rotate_right(n);
 
-		*index += MARGIN - target;
+		*index += n as isize;
 		return MARGIN;
 	}
 
 	let diff = target - tape.len() as isize;
 
 	if diff >= 0 {
-		let extra_diff = (diff + MARGIN) as usize;
-		tape.extend(repeat(Wrapping(0u8)).take(extra_diff));
+		let n = (MARGIN + diff) as usize;
+		tape.extend(repeat(Wrapping(0u8)).take(n));
 	}
 
 	target
@@ -56,8 +83,8 @@ macro_rules! cell_write {
 
 pub fn eval (
 	prog : &[IR],
-	input : &mut dyn Read,
-	output : &mut dyn Write,
+	input : &mut dyn io::Read,
+	output : &mut dyn io::Write,
 	tape : &mut VecDeque<Wrapping<u8>>,
 	mut index : isize
 ) -> io::Result<isize> {
@@ -66,8 +93,7 @@ pub fn eval (
 	for inst in prog.iter() {
 		match inst {
 			IR::Touch(high, low) => {
-				touch_on_tape(tape, &mut index, *high + 1);
-				touch_on_tape(tape, &mut index, *low);
+				touch_range(tape, &mut index, *high + 1, *low);
 			},
 
 			IR::Set(off, val) => {
@@ -104,7 +130,7 @@ pub fn eval (
 					break;
 				}
 
-				let target = touch_on_tape(tape, &mut index, *off);
+				let target = touch_cell(tape, &mut index, *off);
 				*cell_write!(tape, target) = *val;
 
 				index += *step;

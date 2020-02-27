@@ -1,3 +1,4 @@
+use std::cmp::*;
 use std::iter::*;
 use std::num::Wrapping;
 
@@ -277,6 +278,39 @@ fn loop_inst (
 	out_list.push(IR::Loop(in_list));
 }
 
+#[inline]
+fn set_touch_inst (
+	inout_list : &mut Vec<IR>
+) {
+	let mut upper = 0;
+	let mut lower = 0;
+
+	for i in (0..inout_list.len()).rev() {
+		match inout_list.get_mut(i).unwrap() {
+			IR::Touch(high, low) => {
+				*high = max(*high, upper);
+				*low = min(*low, lower);
+
+				upper = 0;
+				lower = 0;
+			}
+
+			IR::Set(off,_) | IR::Add(off,_) | IR::Mul(off,_) |
+			IR::Store(off) | IR::Input(off) | IR::Output(off) => {
+				upper = max(upper, *off);
+				lower = min(lower, *off);
+			}
+
+			IR::Move(off) => {
+				upper += max(0, *off);
+				lower += min(0, *off);
+			},
+
+			_ => (),
+		}
+	}
+}
+
 pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 	let mut prog = Vec::new();
 	let mut off_acc = 0isize;
@@ -322,36 +356,7 @@ pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 		*index += 1;
 	}
 
-	let mut upper = 0;
-	let mut lower = 0;
-
-	for i in (0..prog.len()).rev() {
-		match prog.get_mut(i).unwrap() {
-			IR::Touch(high, low) => {
-				if upper > *high { *high = upper; }
-				if lower < *low { *low = lower; }
-
-				upper = 0;
-				lower = 0;
-			}
-
-			IR::Set(off,_) | IR::Add(off,_) | IR::Mul(off,_) |
-			IR::Store(off) | IR::Input(off) | IR::Output(off) => {
-				if *off > upper { upper = *off; }
-				if *off < lower { lower = *off; }
-			}
-
-			IR::Move(off) => {
-				let shifted_upper = *off + upper;
-				let shifted_lower = *off + lower;
-
-				if shifted_upper > upper { upper = shifted_upper; }
-				if shifted_lower < lower { lower = shifted_lower; }
-			},
-
-			_ => (),
-		}
-	}
+	set_touch_inst(&mut prog);
 
 	if off_acc != 0 {
 		prog.push(IR::Move(off_acc));
