@@ -92,8 +92,7 @@ fn main() -> io::Result<()> {
 		input = &mut str_input;
 	}
 
-	let mut index = 0usize;
-	let prog = parse(&code, &mut index);
+	let prog = parse(&code);
 	if verbosity > 0 { show_code(&prog, 0); }
 
 	let mut tape = VecDeque::with_capacity(0x2000);

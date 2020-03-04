@@ -7,7 +7,7 @@ use crate::internal::*;
 pub fn check_valid (bytes : &[u8]) -> bool {
 	let mut sum = 0;
 
-	// returns true for 'Y', '[', ']' or '_'
+	// returns true for 'Y', '[', ']' and '_'
 	let f = |k : &&u8| -> bool { **k & 0xf9 == 0x59 };
 
 	for b in bytes.iter().filter(f) {
@@ -47,34 +47,63 @@ fn munch_forward (
 }
 
 #[inline]
-fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
-	match out_list.last_mut() {
-		Some(IR::Set(off, val)) if *off == offset => {
-			*val += sum;
-		},
+fn set_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
+	let mut i = out_list.len() - 1;
 
-		Some(IR::Add(off, val)) if *off == offset => {
-			*val += sum;
-			if *val == Wrapping(0u8) {
-				out_list.pop();
-			}
-		},
+	while let Some(IR::Set(off, _))
+			| Some(IR::Add(off, _))
+			| Some(IR::Mul(off, _)) = out_list.get_mut(i) {
+		if *off == offset {
+			out_list.remove(i);
+		}
 
-		_ => if sum != Wrapping(0u8) {
-			out_list.push(IR::Add(offset, sum))
-		},
+		i -= 1;
 	}
+
+	out_list.push(IR::Set(offset, sum))
 }
 
 #[inline]
-fn move_inst (out_list : &mut Vec<IR>, offset : &mut isize) -> bool {
+fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
+	if sum == Wrapping(0u8) {
+		return;
+	}
+
+	for i in (0..out_list.len()).rev() {
+		match out_list.get_mut(i) {
+			Some(IR::Set(off, val)) => if *off == offset {
+				*val += sum;
+				return;
+			},
+
+			Some(IR::Add(off, val)) => if *off == offset {
+				*val += sum;
+				if *val == Wrapping(0u8) {
+					out_list.remove(i);
+				}
+				return;
+			},
+
+			Some(IR::Touch(_,_)) => (),
+
+			Some(IR::Start) => {
+				out_list.push(IR::Set(offset, sum));
+				return;
+			},
+
+			_ => break,
+		}
+	}
+
+	out_list.push(IR::Add(offset, sum))
+}
+
+#[inline]
+fn move_inst (out_list : &mut Vec<IR>, offset : &mut isize) {
 	if *offset != 0 {
 		out_list.push(IR::Move(*offset));
 		*offset = 0;
-		return true;
 	}
-
-	false
 }
 
 #[inline]
@@ -95,16 +124,7 @@ fn clear_loop (
 		return false;
 	}
 
-	while let Some(IR::Set(off, _))
-			| Some(IR::Add(off, _)) = out_list.last() {
-		if *off == *offset {
-			out_list.pop();
-		} else {
-			break;
-		}
-	}
-
-	out_list.push(IR::Set(*offset, Wrapping(0u8)));
+	set_inst(out_list, Wrapping(0u8), *offset);
 	true
 }
 
@@ -116,10 +136,10 @@ fn flat_loop (
 ) -> bool {
 	let mut sum = Wrapping(1u8);
 
-	for x in in_list.iter() {
+	for x in in_list.iter().skip(1) {
 		match x {
 			IR::Add(0, val) => { sum += *val },
-			IR::Touch(_, _) | IR::Add(_, _) => (),
+			IR::Add(_, _) => (),
 			_ => return false,
 		}
 	}
@@ -128,16 +148,43 @@ fn flat_loop (
 		return false;
 	}
 
-	out_list.push(IR::Store(*offset));
+	let mut imm = None;
+
+	for x in out_list.iter().rev() {
+		match x {
+			IR::Set(off, val) if *off == *offset => {
+				imm = Some(*val);
+				break;
+			},
+
+			IR::Add(off, _) if *off == *offset => break,
+			IR::Add(_,_) | IR::Set(_,_) => (),
+			_ => break,
+		}
+	}
+
+	if imm.is_none() {
+		out_list.push(IR::Store(*offset));
+	}
 
 	for x in in_list.iter() {
 		match x {
 			IR::Add(0, _) => (),
 			IR::Add(off, val) => {
-				out_list.push(IR::Mul(*offset + *off, *val))
+				let new_off = *offset + *off;
+
+				if let Some(factor) = imm {
+					add_inst(out_list, *val * factor, new_off);
+				} else {
+					out_list.push(IR::Mul(new_off, *val))
+				}
 			},
 			_ => (),
 		}
+	}
+
+	if imm.is_some() {
+		set_inst(out_list, Wrapping(0u8), *offset)
 	}
 
 	true
@@ -149,14 +196,14 @@ fn scan_loop (
 	in_list : &[IR],
 	offset : &mut isize
 ) -> bool {
-	let mut step = 0;
-	let mut set_step = false;
 	let mut start_cell = Wrapping(0u8);
 	let mut end_cell = Wrapping(0u8);
+	let mut set_step = false;
+	let mut step = 0;
 
-	for x in in_list.iter() {
+	for x in in_list.iter().skip(1) {
 		match x {
-			IR::Move(_) | IR::Add(_,_) | IR::Touch(_,_) => (),
+			IR::Move(_) | IR::Add(_,_) => (),
 			_ => return false,
 		}
 	}
@@ -243,8 +290,8 @@ fn fixed_loop (
 	for i in (0..out_list.len()).rev() {
 		if let Some(IR::Touch(high, low)) = out_list.get_mut(i) {
 			if let Some(IR::Touch(new_high, new_low)) = in_list.first() {
-				if *new_high > *high { *high = *new_high; }
-				if *new_low < *low { *low = *new_low; }
+				*high = max(*high, *new_high);
+				*low = min(*low, *new_low);
 
 				let tail : Vec<IR> = in_list.to_vec()
 					.into_iter().skip(1).collect::<Vec<IR>>();
@@ -279,9 +326,7 @@ fn loop_inst (
 }
 
 #[inline]
-fn set_touch_inst (
-	inout_list : &mut Vec<IR>
-) {
+fn set_touch_inst (inout_list : &mut Vec<IR>) {
 	let mut upper = 0;
 	let mut lower = 0;
 
@@ -311,9 +356,17 @@ fn set_touch_inst (
 	}
 }
 
-pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
+pub fn parse_recursive(
+	code : &[u8],
+	mut index : &mut usize,
+	root : bool
+) -> Vec<IR> {
 	let mut prog = Vec::new();
 	let mut off_acc = 0isize;
+
+	if root {
+		prog.push(IR::Start);
+	}
 
 	prog.push(IR::Touch(0,0));
 
@@ -343,7 +396,7 @@ pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 
 			b'[' => {
 				*index += 1;
-				let content = parse(&code, index);
+				let content = parse_recursive(&code, index, false);
 
 				loop_inst(&mut prog, content, &mut off_acc);
 			},
@@ -358,9 +411,14 @@ pub fn parse(code : &[u8], mut index : &mut usize) -> Vec<IR> {
 
 	set_touch_inst(&mut prog);
 
-	if off_acc != 0 {
-		prog.push(IR::Move(off_acc));
+	if !root {
+		move_inst(&mut prog, &mut off_acc);
 	}
 
 	prog
+}
+
+pub fn parse(code : &[u8]) -> Vec<IR> {
+	let mut index = 0;
+	parse_recursive(code, &mut index, true)
 }

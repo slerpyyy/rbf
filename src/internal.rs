@@ -3,6 +3,7 @@ use std::num::Wrapping;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IR {
+	Start,
 	Touch(isize, isize),
 	Set(isize, Wrapping<u8>),
 	Add(isize, Wrapping<u8>),
@@ -20,19 +21,19 @@ pub enum IR {
 impl fmt::Display for IR {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			IR::Touch(high, low) => write!(f, "tch {:+} {:+}", high, low),
-			IR::Set(off, val) => write!(f, "set {:+} {}", off, val),
-			IR::Add(off, val) => write!(f, "add {:+} {}", off, val),
-			IR::Mul(off, val) => write!(f, "mul {:+} {}", off, val),
-			IR::Move(off) => write!(f, "mov {:+}", off),
-			IR::Store(off) => write!(f, "stn {:+}", off),
-			IR::Loop(_) => write!(f, "rep"),
-			IR::FixedLoop(_) => write!(f, "fre"),
-			IR::Scan(val, off) => write!(f, "scn {} {:+}", val, off),
-			IR::Fill(off, val, step)
-				=> write!(f, "fll {:+} {} {:+}", off, val, step),
-			IR::Input(off) => write!(f, "inp {:+}", off),
-			IR::Output(off) => write!(f, "out {:+}", off),
+			IR::Start        => write!(f, "start"                      ),
+			IR::Touch(h,l)   => write!(f, "touch {:+} {:+}"        ,h,l),
+			IR::Set(o,v)     => write!(f, "set   {:+} {}"          ,o,v),
+			IR::Add(o,v)     => write!(f, "add   {:+} {}"          ,o,v),
+			IR::Mul(o,v)     => write!(f, "mul   {:+} {}"          ,o,v),
+			IR::Move(o)      => write!(f, "mov   {:+}"               ,o),
+			IR::Store(o)     => write!(f, "store {:+}"               ,o),
+			IR::Loop(_)      => write!(f, "loop"                       ),
+			IR::FixedLoop(_) => write!(f, "loop  (fixed)"              ),
+			IR::Scan(v,s)    => write!(f, "scan  {} {:+}"          ,v,s),
+			IR::Fill(o,v,s)  => write!(f, "fill  {:+} {} {:+}"   ,o,v,s),
+			IR::Input(o)     => write!(f, "in    {:+}"               ,o),
+			IR::Output(o)    => write!(f, "out   {:+}"               ,o),
 		}
 	}
 }
@@ -44,13 +45,10 @@ pub fn show_code (prog : &[IR], ind : u32) {
 		}
 
 		match inst {
-			IR::Loop(sub) |
-			IR::FixedLoop(sub) => {
+			IR::Loop(sub) | IR::FixedLoop(sub) => {
 				println!("{}", inst);
 				show_code(sub, ind + 1);
 			},
-
-			IR::Touch(_,_) => println!("{} \t<-----", inst),
 
 			_ => println!("{}", inst),
 		}

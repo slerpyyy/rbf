@@ -19,11 +19,10 @@ fn touch_range (
 
 	let upper_diff = max(0, upper - tape.len() as isize) as usize;
 	let lower_diff = max(0, -lower) as usize;
+	let total_diff = upper_diff + lower_diff;
 
-	let ext_raw = upper_diff + lower_diff;
-
-	if ext_raw > 0 {
-		let ext = ext_raw + 2 * MARGIN;
+	if total_diff > 0 {
+		let ext = total_diff + MARGIN * 2;
 		let rot = lower_diff + MARGIN;
 
 		tape.extend(repeat(Wrapping(0u8)).take(ext));
@@ -121,7 +120,10 @@ pub fn eval (
 			},
 
 			IR::Scan(val, step) => loop {
-				if *cell_read!(tape, index) == *val { break; }
+				if *cell_read!(tape, index) == *val {
+					break;
+				}
+
 				index += *step;
 			},
 
@@ -158,6 +160,8 @@ pub fn eval (
 
 				index = eval(&loop_prog, input, output, tape, index)?;
 			},
+
+			_ => (),
 		}
 	}
 
