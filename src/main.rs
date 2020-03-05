@@ -33,7 +33,7 @@ fn main() -> io::Result<()> {
 	opts.optopt("c", "cmd", "run code from command", "CODE");
 	opts.optopt("i", "input", "use string as input", "TEXT");
 	opts.optflag("f", "force", "allow invalid code to run");
-	opts.optflagmulti("v", "verbose", "increase level of verbosity");
+	opts.optflag("s", "static", "only print the generated code");
 
 	let matches = match opts.parse(&args[1..]) {
 		Ok(m) => { m },
@@ -47,8 +47,6 @@ fn main() -> io::Result<()> {
 		print_usage(&program, &opts);
 		return Ok(());
 	}
-
-	let verbosity = matches.opt_count("v");
 
 	let mut code : Vec<u8> = Vec::new();
 
@@ -73,6 +71,13 @@ fn main() -> io::Result<()> {
 		return Ok(());
 	};
 
+	let prog = parse(&code);
+
+	if matches.opt_present("s") {
+		show_code(&prog, 140);
+		return Ok(());
+	}
+
 	if !matches.opt_present("f") && !check_valid(&code) {
 		eprintln!("ERROR : invalid code");
 		process::exit(-1);
@@ -91,9 +96,6 @@ fn main() -> io::Result<()> {
 	if in_string.is_some() {
 		input = &mut str_input;
 	}
-
-	let prog = parse(&code);
-	if verbosity > 0 { show_code(&prog, 0); }
 
 	let mut tape = VecDeque::with_capacity(0x2000);
 	tape.extend(repeat(Wrapping(0u8)).take(0x1000));

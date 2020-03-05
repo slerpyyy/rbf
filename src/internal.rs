@@ -1,5 +1,8 @@
 use std::fmt;
+use std::cmp::*;
 use std::num::Wrapping;
+use std::iter::*;
+use std::string::*;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IR {
@@ -38,19 +41,50 @@ impl fmt::Display for IR {
 	}
 }
 
-pub fn show_code (prog : &[IR], ind : u32) {
+fn write_code (prog : &[IR], ind : u32, lines : &mut Vec<String>) {
 	for inst in prog.iter() {
+		let mut padding = String::new();
+
 		for _ in 0..ind {
-			print!("| ");
+			padding.push_str("| ");
 		}
 
 		match inst {
 			IR::Loop(sub) | IR::FixedLoop(sub) => {
-				println!("{}", inst);
-				show_code(sub, ind + 1);
+				lines.push(format!("{}{}", padding, inst));
+
+				write_code(sub, ind + 1, lines);
 			},
 
-			_ => println!("{}", inst),
+			_ => {
+				lines.push(format!("{}{}", padding, inst));
+			}
 		}
+	}
+}
+
+pub fn show_code (prog : &[IR], max_width : usize) {
+	let mut lines = Vec::new();
+	write_code(prog, 0, &mut lines);
+
+	let width = 6 + lines.iter().map(String::len).max().unwrap_or(0);
+	let height = lines.len();
+
+	let colums = max(min(max_width / width, height / 24), 1);
+	let rows = max(height / colums, 0) + 1;
+
+	for y in 0..rows {
+		for x in 0..colums {
+			let default = String::new();
+			let line = lines.get(y + rows * x).unwrap_or(&default);
+			print!("{}", line);
+
+			if x < colums - 1 {
+				let padding = " ".repeat(width - line.len());
+				print!("{}", padding);
+			}
+		}
+
+		println!();
 	}
 }
