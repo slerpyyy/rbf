@@ -18,7 +18,7 @@ To speed up evaluation, rbf uses an internal representation which is generated f
 | `Loop(sub)` | `[>>+++]` | Run the sub program while the cell at index is not 0. |
 | `Scan(val, step)` | `[->>+]` | Begin at index and move by step until a cell with a value of val is found. |
 | `Fill(off, val, step)` | `[[-]++>]` | Begin at index and move by step while setting cells with<br>offset off to val until a cell with value 0 is found. |
-| `Input(off)` | `,` | Recieve one byte and write it to the cell at index+off. |
+| `Input(off)` | `,` | Receive one byte and write it to the cell at index+off. |
 | `Output(off)` | `.` | Send the value of the cell at index+off. |
 
 You can take a look at the generated IR using the `--static` flag.
@@ -30,7 +30,7 @@ This program requires rust to be installed. You can find a guide on how to insta
 ```
 git clone https://github.com/slerpyyy/rbf.git
 cd rbf
-cargo build --release
+cargo install --path .
 ```
 
 ## Usage
