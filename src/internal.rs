@@ -14,7 +14,7 @@ pub enum IR {
 	Move(isize),
 	Store(isize),
 	Loop(Vec<IR>),
-	FixedLoop(Vec<IR>),
+	FixedLoop(Vec<IR>,isize,isize),
 	Scan(Wrapping<u8>, isize),
 	Fill(isize, Wrapping<u8>, isize),
 	Input(isize),
@@ -24,19 +24,19 @@ pub enum IR {
 impl fmt::Display for IR {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			IR::Start        => write!(f, "start"                      ),
-			IR::Touch(h,l)   => write!(f, "touch {:+} {:+}"        ,h,l),
-			IR::Set(o,v)     => write!(f, "set   {:+} {}"          ,o,v),
-			IR::Add(o,v)     => write!(f, "add   {:+} {}"          ,o,v),
-			IR::Mul(o,v)     => write!(f, "mul   {:+} {}"          ,o,v),
-			IR::Move(o)      => write!(f, "mov   {:+}"               ,o),
-			IR::Store(o)     => write!(f, "store {:+}"               ,o),
-			IR::Loop(_)      => write!(f, "loop"                       ),
-			IR::FixedLoop(_) => write!(f, "loop  (fixed)"              ),
-			IR::Scan(v,s)    => write!(f, "scan  {} {:+}"          ,v,s),
-			IR::Fill(o,v,s)  => write!(f, "fill  {:+} {} {:+}"   ,o,v,s),
-			IR::Input(o)     => write!(f, "in    {:+}"               ,o),
-			IR::Output(o)    => write!(f, "out   {:+}"               ,o),
+			IR::Start            => write!(f, "start"                      ),
+			IR::Touch(h,l)       => write!(f, "touch {:+} {:+}"        ,h,l),
+			IR::Set(o,v)         => write!(f, "set   {:+} {}"          ,o,v),
+			IR::Add(o,v)         => write!(f, "add   {:+} {}"          ,o,v),
+			IR::Mul(o,v)         => write!(f, "mul   {:+} {}"          ,o,v),
+			IR::Move(o)          => write!(f, "mov   {:+}"               ,o),
+			IR::Store(o)         => write!(f, "store {:+}"               ,o),
+			IR::Loop(_)          => write!(f, "loop"                       ),
+			IR::FixedLoop(_,h,l) => write!(f, "loop  {:+} {:+} (fix)"  ,h,l),
+			IR::Scan(v,s)        => write!(f, "scan  {} {:+}"          ,v,s),
+			IR::Fill(o,v,s)      => write!(f, "fill  {:+} {} {:+}"   ,o,v,s),
+			IR::Input(o)         => write!(f, "in    {:+}"               ,o),
+			IR::Output(o)        => write!(f, "out   {:+}"               ,o),
 		}
 	}
 }
@@ -50,7 +50,7 @@ fn write_code (prog : &[IR], ind : u32, lines : &mut Vec<String>) {
 		}
 
 		match inst {
-			IR::Loop(sub) | IR::FixedLoop(sub) => {
+			IR::Loop(sub) | IR::FixedLoop(sub,_,_) => {
 				lines.push(format!("{}{}", padding, inst));
 
 				write_code(sub, ind + 1, lines);

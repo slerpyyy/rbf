@@ -14,7 +14,7 @@ fn touch_range (
 	low : isize
 ) {
 	const MARGIN : usize = 16;
-	let upper = *index as isize + high;
+	let upper = *index as isize + high + 1;
 	let lower = *index as isize + low;
 
 	let upper_diff = max(0, upper - tape.len() as isize) as usize;
@@ -60,25 +60,16 @@ fn touch_cell (
 	target
 }
 
-macro_rules! cell_read {
-	($tape:ident, $index:expr) => {
+macro_rules! cell {
+	(read, $tape:ident, $index:expr) => {
 		$tape.get($index as usize).unwrap_or(&Wrapping(0u8))
 	};
 
-	($tape:ident, $index:expr, $offset:expr) => {
-		cell_read!($tape, $index + $offset)
-	};
-}
-
-macro_rules! cell_write {
-	($tape:ident, $index:expr) => {
+	(write, $tape:ident, $index:expr) => {
 		$tape.get_mut($index as usize).unwrap()
 	};
-
-	($tape:ident, $index:expr, $offset:expr) => {
-		cell_write!($tape, $index + $offset)
-	};
 }
+
 
 pub fn eval (
 	prog : &[IR],
@@ -92,20 +83,20 @@ pub fn eval (
 	for inst in prog.iter() {
 		match inst {
 			IR::Touch(high, low) => {
-				touch_range(tape, &mut index, *high + 1, *low);
+				touch_range(tape, &mut index, *high, *low);
 			},
 
 			IR::Set(off, val) => {
-				*cell_write!(tape, index, off) = *val;
+				*cell!(write, tape, index + off) = *val;
 			},
 
 			IR::Add(off, val) => {
-				*cell_write!(tape, index, off) += *val;
+				*cell!(write, tape, index + off) += *val;
 			},
 
 			IR::Mul(off, val) => {
 				let term = *val * register;
-				*cell_write!(tape, index, off) += term;
+				*cell!(write, tape, index + off) += term;
 			}
 
 			IR::Move(off) => {
@@ -113,14 +104,14 @@ pub fn eval (
 			},
 
 			IR::Store(off) => {
-				let cell = cell_write!(tape, index, off);
+				let cell = cell!(write, tape, index + off);
 
 				register = *cell;
 				*cell = Wrapping(0u8);
 			},
 
 			IR::Scan(val, step) => loop {
-				if *cell_read!(tape, index) == *val {
+				if *cell!(read, tape, index) == *val {
 					break;
 				}
 
@@ -128,12 +119,12 @@ pub fn eval (
 			},
 
 			IR::Fill(off, val, step) => loop {
-				if *cell_read!(tape, index) == Wrapping(0u8) {
+				if *cell!(read, tape, index) == Wrapping(0u8) {
 					break;
 				}
 
 				let target = touch_cell(tape, &mut index, *off);
-				*cell_write!(tape, target) = *val;
+				*cell!(write, tape, target) = *val;
 
 				index += *step;
 			},
@@ -145,16 +136,16 @@ pub fn eval (
 				}
 
 				let val = Wrapping(buffer[0]);
-				*cell_write!(tape, index, off) = val;
+				*cell!(write, tape, index + off) = val;
 			},
 
 			IR::Output(off) => {
-				let cell = *cell_read!(tape, index, off);
+				let cell = *cell!(read, tape, index + off);
 				output.write_all(&[cell.0])?;
 			},
 
-			IR::Loop(loop_prog) | IR::FixedLoop(loop_prog) => loop {
-				if *cell_read!(tape, index) == Wrapping(0u8) {
+			IR::Loop(loop_prog) | IR::FixedLoop(loop_prog,_,_) => loop {
+				if *cell!(read, tape, index) == Wrapping(0u8) {
 					break;
 				}
 
