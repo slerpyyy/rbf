@@ -41,10 +41,19 @@ pub fn add_inst (out_list : &mut Vec<IR>, sum : Wrapping<u8>, offset : isize) {
 				return;
 			},
 
+			Some(IR::Mul(off, _)) => if *off == offset {
+				break;
+			}
+
+			Some(IR::Store(off)) => if *off == offset {
+				out_list.push(IR::Set(offset, sum));
+				return;
+			}
+
 			Some(IR::Touch(_,_)) => (),
 
 			Some(IR::FixedLoop(_, high, low)) => {
-				if offset <= *high && offset >= *low { break; }
+				if offset >= *low && offset <= *high { break; }
 			},
 
 			Some(IR::Start) => {
@@ -73,20 +82,14 @@ fn clear_loop (
 	in_list : &[IR],
 	offset : &mut isize
 ) -> bool {
-	if in_list.len() != 2 {
-		return false;
-	}
-
-	if let Some(IR::Add(0, val)) = in_list.last() {
-		if *val != Wrapping(1u8) && *val != Wrapping(255u8) {
-			return false;
+	if let [IR::Touch(_,_), IR::Add(0, Wrapping(val))] = in_list {
+		if *val == 1u8 || *val == 255u8 {
+			set_inst(out_list, Wrapping(0u8), *offset);
+			return true;
 		}
-	} else {
-		return false;
 	}
 
-	set_inst(out_list, Wrapping(0u8), *offset);
-	true
+	false
 }
 
 #[inline]
@@ -211,16 +214,10 @@ fn scan_loop (
 
 #[inline]
 fn fill_loop (out_list : &mut Vec<IR>, in_list : &[IR]) -> bool {
-	if in_list.len() != 3 {
-		return false;
-	}
-
-	if let Some(IR::Set(off, val)) = in_list.get(1) {
-		if let Some(IR::Move(step)) = in_list.get(2) {
-			out_list.push(IR::Fill(*off, *val, *step));
-			out_list.push(IR::Touch(0, 0));
-			return true;
-		}
+	if let [IR::Touch(_,_), IR::Set(off, val), IR::Move(step)] = in_list {
+		out_list.push(IR::Fill(*off, *val, *step));
+		out_list.push(IR::Touch(0, 0));
+		return true;
 	}
 
 	false
@@ -265,6 +262,29 @@ pub fn loop_inst (
 	in_list : Vec<IR>,
 	offset : &mut isize
 ) {
+	for inst in out_list.iter().rev() {
+		if let IR::Set(off, _) | IR::Add(off, _) | IR::Mul(off, _)
+			 | IR::Store(off) | IR::Input(off) | IR::Output(off) = inst {
+			if *off != *offset { continue; }
+		}
+
+		match inst {
+			IR::Start => return,
+
+			IR::Set(_, Wrapping(0)) => return,
+			IR::Set(_, _) => break,
+			IR::Store(_) => return,
+
+			IR::FixedLoop(_, high, low) => {
+				if *offset >= *low && *offset <= *high { break; }
+			},
+
+			IR::Touch(_, _) => (),
+
+			_ => break,
+		}
+	}
+
 	if clear_loop(out_list, &in_list, offset) { return; }
 	if flat_loop(out_list, &in_list, offset) { return; }
 	if scan_loop(out_list, &in_list, offset) { return; }

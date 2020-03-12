@@ -24,7 +24,7 @@ pub fn check_valid (bytes : &[u8]) -> bool {
 		}
 	}
 
-	(sum == 0)
+	sum == 0
 }
 
 #[inline]
