@@ -13,7 +13,6 @@ fn touch_range(
     high : isize,
     low : isize
 ) {
-    const MARGIN : usize = 16;
     let upper = *index as isize + high + 1;
     let lower = *index as isize + low;
 
@@ -22,13 +21,10 @@ fn touch_range(
     let total_diff = upper_diff + lower_diff;
 
     if total_diff > 0 {
-        let ext = total_diff + MARGIN * 2;
-        let rot = lower_diff + MARGIN;
+        tape.extend(repeat(Wrapping(0u8)).take(total_diff));
+        tape.rotate_right(lower_diff);
 
-        tape.extend(repeat(Wrapping(0u8)).take(ext));
-        tape.rotate_right(rot);
-
-        *index += rot as isize;
+        *index += lower_diff as isize;
     }
 }
 
@@ -38,22 +34,21 @@ fn touch_cell(
     index : &mut isize,
     offset : isize
 ) -> isize {
-    const MARGIN : isize = 16;
     let target = *index as isize + offset;
 
     if target < 0 {
-        let n = (MARGIN - target) as usize;
+        let n = -target as _;
         tape.extend(repeat(Wrapping(0u8)).take(n));
         tape.rotate_right(n);
 
-        *index += n as isize;
-        return MARGIN;
+        *index -= target;
+        return 0;
     }
 
     let diff = target - tape.len() as isize;
 
     if diff >= 0 {
-        let n = (MARGIN + diff) as usize;
+        let n = diff as _;
         tape.extend(repeat(Wrapping(0u8)).take(n));
     }
 
@@ -71,7 +66,7 @@ macro_rules! cell {
 }
 
 
-pub fn eval_recursive<R,W> (
+pub fn eval_recursive<R,W>(
     prog: &[IR],
     input: &mut R,
     output: &mut W,
@@ -133,7 +128,7 @@ where R: Read, W: Write {
 
             IR::Input(off) => {
                 if input.read_exact(buffer).is_err() {
-                    continue;
+                    buffer[0] = 0u8;
                 }
 
                 let val = Wrapping(buffer[0]);
@@ -162,7 +157,7 @@ where R: Read, W: Write {
     index
 }
 
-pub fn eval<R,W> (
+pub fn eval<R,W>(
     prog: &[IR],
     input: &mut R,
     output: &mut W,
@@ -176,10 +171,20 @@ where R: Read, W: Write {
 
 #[cfg(test)]
 mod test {
-    use crate::evaluator::eval;
-    use crate::parser::parse;
     use std::collections::VecDeque;
-    use std::io::empty;
+    use std::io::{empty, sink};
+
+    use crate::evaluator::*;
+    use crate::parser::*;
+
+    #[test]
+    fn eval_simple() {
+        let code = b"+++>--<[>++++<-]++";
+        let prog = parse(code);
+        let mut tape = VecDeque::new();
+        eval(&prog, &mut empty(), &mut sink(), &mut tape, 0);
+        assert_eq!(tape, vec![Wrapping(2), Wrapping(10)]);
+    }
 
     #[test]
     fn eval_hello() {
@@ -189,5 +194,16 @@ mod test {
         let mut output = Vec::new();
         eval(&prog, &mut empty(), &mut output, &mut tape, 0);
         assert_eq!(output, b"Hello, World!");
+    }
+
+    #[test]
+    fn eval_cat() {
+        let code = b",[+++.,]";
+        let prog = parse(code);
+        let mut tape = VecDeque::new();
+        let mut input: &[u8] = b"abc";
+        let mut output = Vec::new();
+        eval(&prog, &mut input, &mut output, &mut tape, 0);
+        assert_eq!(output, b"def");
     }
 }
