@@ -52,15 +52,17 @@ You can take a look at the generated IR using the `--static` flag.
 
 ## Benchmarks
 
-Here are some execution times of rbf compared to some of the fastest brainfuck interpreters I know. The times shown in the table below are averages of multiple runs.
+Here are some execution times of rbf compared with the two fastest brainfuck interpreters I know. The times shown in the table below are averages of multiple runs.
 
 | | hanoi.b | bench.b | sort.b\* | mandelbrot.b | long.b | 99bottles.b |
 |---|---|---|---|---|---|---|
-| [copy.sh](https://copy.sh/brainfuck/) | 10.872s | **0.176s** | | 29.035s | **0.746s** | 5.303s |
-| [bfc](https://github.com/barracks510/bfc) | 0.586s | 0.592s | **12.129s** | **7.428s** | 3.851s | **0.002s** |
-| rbf *(this one)* | **0.412s** | 0.516s | 13.295s | 9.090s | 2.805s | 0.006s |
+| [copy.sh](https://copy.sh/brainfuck/) | 10.872s | 0.176s | | 29.035s | 0.746s | 5.303s |
+| [bfc](https://github.com/barracks510/bfc) | 0.586s | 0.592s | 12.129s | 7.428s | 3.851s | 0.002s |
+| rbf *(this one)* | 0.412s | 0.516s | 13.295s | 9.090s | 2.805s | 0.006s |
 
 \* the program was run with [the man-page of man](http://man7.org/linux/man-pages/man1/man.1.html) as input. Interpreters, which refused to work with such manly inputs, have no time in this column.
+
+
 
 ## Extra Credits
 
