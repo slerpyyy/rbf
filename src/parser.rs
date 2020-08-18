@@ -148,3 +148,38 @@ pub fn parse(code: &[u8]) -> Vec<IR> {
     let mut index = 0;
     parse_recursive(code, &mut index, true)
 }
+
+#[cfg(test)]
+mod test {
+    use crate::parser::*;
+
+    #[test]
+    fn check_valid_good() {
+        let code = b"he+ll+o t+he--r.e";
+        assert!(check_valid(code));
+
+        let code = b"+++[>++<-]++.[-]--.";
+        assert!(check_valid(code));
+
+        let code = b"+[++[--->++[-]]]";
+        assert!(check_valid(code));
+    }
+
+    #[test]
+    fn check_valid_bad() {
+        let code = b"aaaaa+a+a-a++]";
+        assert!(!check_valid(code));
+
+        let code = b"+++[>++<-]++.-]--.";
+        assert!(!check_valid(code));
+    }
+
+    #[test]
+    fn munch_forward_simple() {
+        let text = b".....aababba...";
+        let mut index = 5;
+
+        assert_eq!(munch_forward(text, &mut index, b'a', b'b'), 1);
+        assert_eq!(index, 12)
+    }
+}
