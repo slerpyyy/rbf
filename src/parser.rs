@@ -1,5 +1,4 @@
-use std::cmp::*;
-use std::iter::*;
+use std::cmp::{max, min};
 use std::num::Wrapping;
 
 use crate::internal::*;
@@ -181,5 +180,37 @@ mod test {
 
         assert_eq!(munch_forward(text, &mut index, b'a', b'b'), 1);
         assert_eq!(index, 12)
+    }
+
+    #[test]
+    fn parse_simple() {
+        let code = b"+++>>++>--,.";
+        let prog = parse(code);
+        let expected = vec![
+            IR::Start,
+            IR::Touch(3, 0),
+            IR::Set(0, Wrapping(3)),
+            IR::Set(2, Wrapping(2)),
+            IR::Set(3, -Wrapping(2)),
+            IR::Input(3),
+            IR::Output(3),
+        ];
+
+        assert_eq!(prog, expected);
+    }
+
+    #[test]
+    fn parse_flat_loop() {
+        let code = b"+++[>++++<-]>.";
+        let prog = parse(code);
+        let expected = vec![
+            IR::Start,
+            IR::Touch(1, 0),
+            IR::Set(1, Wrapping(12)),
+            IR::Set(0, Wrapping(0)),
+            IR::Output(1),
+        ];
+
+        assert_eq!(prog, expected);
     }
 }

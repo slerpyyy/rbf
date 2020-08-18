@@ -1,8 +1,8 @@
-use std::io;
-use std::cmp::*;
+use std::io::{Read, Write};
+use std::cmp::max;
 use std::num::Wrapping;
-use std::collections::*;
-use std::iter::*;
+use std::collections::VecDeque;
+use std::iter::repeat;
 
 use crate::internal::*;
 
@@ -79,7 +79,7 @@ pub fn eval_recursive<R,W> (
     mut index: isize,
     buffer: &mut [u8; 1]
 ) -> isize
-where R: io::Read, W: io::Write {
+where R: Read, W: Write {
     let mut register = Wrapping(0u8);
 
     for inst in prog.iter() {
@@ -146,7 +146,8 @@ where R: io::Read, W: io::Write {
                     .expect("failed to write to output");
             },
 
-            IR::Loop(loop_prog) | IR::FixedLoop(loop_prog, _, _) => loop {
+            IR::Loop(loop_prog) |
+            IR::FixedLoop(loop_prog, _, _) => loop {
                 if *cell!(read, tape, index) == Wrapping(0u8) {
                     break;
                 }
@@ -168,7 +169,25 @@ pub fn eval<R,W> (
     tape: &mut VecDeque<Wrapping<u8>>,
     index: isize
 )
-where R: io::Read, W: io::Write {
+where R: Read, W: Write {
     let mut buffer = [0u8];
     eval_recursive(prog, input, output, tape, index, &mut buffer);
+}
+
+#[cfg(test)]
+mod test {
+    use crate::evaluator::eval;
+    use crate::parser::parse;
+    use std::collections::VecDeque;
+    use std::io::empty;
+
+    #[test]
+    fn eval_hello() {
+        let code = b"+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+.";
+        let prog = parse(code);
+        let mut tape = VecDeque::new();
+        let mut output = Vec::new();
+        eval(&prog, &mut empty(), &mut output, &mut tape, 0);
+        assert_eq!(output, b"Hello, World!");
+    }
 }

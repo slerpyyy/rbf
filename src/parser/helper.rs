@@ -1,4 +1,3 @@
-use std::iter::*;
 use std::num::Wrapping;
 
 use crate::internal::*;

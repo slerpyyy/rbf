@@ -1,8 +1,6 @@
 use std::fmt;
-use std::cmp::*;
+use std::cmp::{max, min};
 use std::num::Wrapping;
-use std::iter::*;
-use std::string::*;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum IR {

@@ -1,14 +1,12 @@
 #![warn(clippy::all)]
 
-use std::*;
-use std::io;
-use std::io::prelude::*;
-use std::num::Wrapping;
+use std::env::args;
+use std::io::{Read, stdin, stdout};
 use std::fs::File;
-use std::collections::*;
-use std::iter::*;
-use string::*;
-use getopts::*;
+use std::num::Wrapping;
+use std::collections::VecDeque;
+use std::iter::repeat;
+use getopts::Options;
 
 mod internal;
 mod parser;
@@ -25,7 +23,7 @@ fn print_usage(program: &str, opts: &Options) {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = args().collect();
     let program = args[0].clone();
 
     let mut opts = Options::new();
@@ -48,7 +46,7 @@ fn main() {
         code = command.as_bytes().to_vec();
     } else if let Some(file_name) = matches.free.get(0) {
         if file_name == "-" {
-            io::stdin()
+            stdin()
                 .read_to_end(&mut code)
                 .expect("failed to read stdin");
         } else {
@@ -70,20 +68,15 @@ fn main() {
     }
 
     if !matches.opt_present("f") && !check_valid(&code) {
-        eprintln!("invalid code");
-        process::exit(-1);
+        panic!("invalid code");
     }
 
     let mut tape = VecDeque::with_capacity(0x2000);
     tape.extend(repeat(Wrapping(0u8)).take(0x1000));
 
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-
     if let Some(input) = matches.opt_str("i") {
-        eval(&prog, &mut input.as_bytes(), &mut stdout.lock(), &mut tape, 0x400);
-    }
-    else {
-        eval(&prog, &mut stdin.lock(), &mut stdout.lock(), &mut tape, 0x400);
+        eval(&prog, &mut input.as_bytes(), &mut stdout().lock(), &mut tape, 0x400);
+    } else {
+        eval(&prog, &mut stdin().lock(), &mut stdout().lock(), &mut tape, 0x400);
     }
 }
