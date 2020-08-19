@@ -4,16 +4,17 @@ use crate::internal::*;
 
 #[inline]
 pub fn set_inst(out_list: &mut Vec<IR>, sum: Wrapping<u8>, offset: isize) {
-    let mut ind = out_list.len() - 1;
-
-    while let Some(IR::Set(off, _))
-            | Some(IR::Add(off, _))
-            | Some(IR::Mul(off, _)) = out_list.get_mut(ind) {
-        if *off == offset {
-            out_list.remove(ind);
+    for (ind, inst) in out_list.clone().iter().enumerate().rev() {
+        match inst {
+            IR::Set(off, _) |
+            IR::Add(off, _) |
+            IR::Mul(off, _) => {
+                if *off == offset {
+                    out_list.remove(ind);
+                }
+            }
+            _ => break,
         }
-
-        ind -= 1;
     }
 
     out_list.push(IR::Set(offset, sum))
@@ -78,7 +79,7 @@ pub fn move_inst(out_list: &mut Vec<IR>, offset: &mut isize) {
 #[inline]
 fn clear_loop(out_list: &mut Vec<IR>, in_list: &[IR], offset: &mut isize) -> bool {
     if let [IR::Touch(_, _), IR::Add(0, Wrapping(val))] = in_list {
-        if *val == 1u8 || *val == 255u8 {
+        if *val & 1 == 1 {
             set_inst(out_list, Wrapping(0u8), *offset);
             return true;
         }
@@ -275,4 +276,49 @@ pub fn loop_inst(out_list: &mut Vec<IR>, in_list: Vec<IR>, offset: &mut isize) {
     if fixed_loop(out_list, &in_list) { return; }
 
     out_list.push(IR::Loop(in_list));
+}
+
+#[cfg(test)]
+mod test {
+    use std::num::Wrapping;
+    use std::collections::HashSet;
+    use crate::internal::IR;
+    use super::*;
+
+    #[test]
+    fn set_inst_simple() {
+        let mut out_list = Vec::new();
+        set_inst(&mut out_list, Wrapping(2), 1);
+        set_inst(&mut out_list, Wrapping(1), 2);
+        set_inst(&mut out_list, Wrapping(3), 0);
+        set_inst(&mut out_list, Wrapping(4), 1);
+        set_inst(&mut out_list, Wrapping(5), 2);
+        assert_eq!(out_list, vec![IR::Set(0, Wrapping(3)), IR::Set(1, Wrapping(4)), IR::Set(2, Wrapping(5))]);
+    }
+
+    #[test]
+    fn clear_loop_wrapping() {
+        for step in (0..=255u8).map(Wrapping) {
+            let mut visited = HashSet::new();
+            let mut current = Wrapping(0u8);
+
+            let mut should_clear = true;
+            for _ in 0..256 {
+                if visited.contains(&current) {
+                    should_clear = false;
+                    break;
+                }
+
+                visited.insert(current);
+                current += step;
+            }
+
+            let in_list = vec![IR::Touch(0, 0), IR::Add(0, step)];
+            let mut out_list = Vec::new();
+            let mut offset = 0;
+            let does_clear = clear_loop(&mut out_list, &in_list, &mut offset);
+
+            assert_eq!(should_clear, does_clear);
+        }
+    }
 }
