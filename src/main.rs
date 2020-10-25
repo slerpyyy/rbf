@@ -24,7 +24,7 @@ fn print_usage(program: &str, opts: &Options) {
 
 fn main() {
     let args: Vec<String> = args().collect();
-    let program = args[0].clone();
+    let program = args.get(0).unwrap();
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "print this help message");
@@ -36,7 +36,7 @@ fn main() {
     let matches = opts.parse(&args[1..]).expect("failed to parse args");
 
     if matches.opt_present("h") {
-        print_usage(&program, &opts);
+        print_usage(program, &opts);
         return;
     }
 
@@ -63,7 +63,7 @@ fn main() {
     let prog = parse(&code);
 
     if matches.opt_present("s") {
-        show_code(&prog, 240);
+        show_code(&prog, 120);
         return;
     }
 

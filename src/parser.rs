@@ -95,17 +95,17 @@ pub fn parse_recursive(
 
     prog.push(IR::Touch(0,0));
 
-    while *index < code.len() {
-        match *code.get(*index).unwrap() {
-            b',' => {
+    loop {
+        match code.get(*index) {
+            Some(b',') => {
                 prog.push(IR::Input(off_acc));
             },
 
-            b'.' => {
+            Some(b'.') => {
                 prog.push(IR::Output(off_acc));
             },
 
-            b'+' | b'-' => {
+            Some(b'+') | Some(b'-') => {
                 let munch = munch_forward(&code, &mut index, b'+', b'-');
                 let sum = Wrapping(munch as u8);
 
@@ -113,20 +113,20 @@ pub fn parse_recursive(
                 continue;
             },
 
-            b'<' | b'>' => {
+            Some(b'<') | Some(b'>') => {
                 let munch = munch_forward(&code, &mut index, b'>', b'<');
                 off_acc += munch as isize;
                 continue;
             },
 
-            b'[' => {
+            Some(b'[') => {
                 *index += 1;
                 let content = parse_recursive(&code, index, false);
 
                 loop_inst(&mut prog, content, &mut off_acc);
             },
 
-            b']' => break,
+            Some(b']') | None => break,
 
             _ => (),
         }
@@ -166,10 +166,13 @@ mod test {
 
     #[test]
     fn check_valid_bad() {
-        let code = b"aaaaa+a+a-a++]";
+        let code = b"aaa[aa+a+a-a++";
         assert!(!check_valid(code));
 
         let code = b"+++[>++<-]++.-]--.";
+        assert!(!check_valid(code));
+
+        let code = b"aaa]aa+a+[a-a++";
         assert!(!check_valid(code));
     }
 

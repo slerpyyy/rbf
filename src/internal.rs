@@ -45,20 +45,20 @@ fn write_code(prog: &[IR], ind: u32, lines: &mut Vec<String>) {
 
         match inst {
             IR::Loop(sub) | IR::FixedLoop(sub, _, _) => {
-                lines.push(padding);
-                lines.push(inst.to_string());
+                let line = format!("{}{}", padding, inst);
+                lines.push(line);
 
                 write_code(sub, ind + 1, lines);
             },
 
             IR::Fill(_, _, _) => {
-                lines.push(padding.replace('|', &"#"));
-                lines.push(inst.to_string());
+                let line = format!("{}{}", padding.replace('|', &"#"), inst);
+                lines.push(line);
             }
 
             _ => {
-                lines.push(padding);
-                lines.push(inst.to_string());
+                let line = format!("{}{}", padding, inst);
+                lines.push(line);
             }
         }
     }

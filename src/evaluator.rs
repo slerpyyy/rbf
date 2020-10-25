@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{Read, Write, Error};
 use std::cmp::max;
 use std::num::Wrapping;
 use std::collections::VecDeque;
@@ -73,7 +73,7 @@ pub fn eval_recursive<R,W>(
     tape: &mut VecDeque<Wrapping<u8>>,
     mut index: isize,
     buffer: &mut [u8; 1]
-) -> isize
+) -> Result<isize, Error>
 where R: Read, W: Write {
     let mut register = Wrapping(0u8);
 
@@ -137,8 +137,7 @@ where R: Read, W: Write {
 
             IR::Output(off) => {
                 buffer[0] = cell!(read, tape, index + off).0;
-                output.write_all(buffer)
-                    .expect("failed to write to output");
+                output.write_all(buffer)?;
             },
 
             IR::Loop(loop_prog) |
@@ -147,14 +146,14 @@ where R: Read, W: Write {
                     break;
                 }
 
-                index = eval_recursive(&loop_prog, input, output, tape, index, buffer);
+                index = eval_recursive(&loop_prog, input, output, tape, index, buffer)?;
             },
 
             _ => (),
         }
     }
 
-    index
+    Ok(index)
 }
 
 pub fn eval<R,W>(
@@ -166,7 +165,7 @@ pub fn eval<R,W>(
 )
 where R: Read, W: Write {
     let mut buffer = [0u8];
-    eval_recursive(prog, input, output, tape, index, &mut buffer);
+    eval_recursive(prog, input, output, tape, index, &mut buffer).unwrap();
 }
 
 #[cfg(test)]
